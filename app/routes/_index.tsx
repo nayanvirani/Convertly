@@ -268,7 +268,7 @@ export default function Index() {
               <div className="pcard pcard--pro">
                 <div className="pcard__chip">7-day free trial</div>
                 <div className="pcard__tier">Pro</div>
-                <div className="pcard__price">$9.99<span> / month</span></div>
+                <div className="pcard__price">$49<span> / month</span></div>
                 <p className="pcard__tag">Everything. Cancel any time.</p>
                 <ul className="pcard__list">
                   {[

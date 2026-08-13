@@ -178,7 +178,7 @@ export default function BillingPage() {
             <BlockStack gap="400">
               <InlineStack align="space-between" blockAlign="center">
                 <Text as="h2" variant="headingLg">Pro Plan</Text>
-                <Text as="p" variant="headingLg">$9.99 / month</Text>
+                <Text as="p" variant="headingLg">$49 / month</Text>
               </InlineStack>
               {isPro ? (
                 <Badge tone="success">Active subscription</Badge>

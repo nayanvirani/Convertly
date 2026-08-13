@@ -38,12 +38,15 @@ const shopify = shopifyApp({
   distribution: AppDistribution.AppStore,
   // Billing config enables billing.check() so we can verify plan status.
   // billing.request() is still handled by Shopify Managed Pricing (Partner Dashboard).
-  // The amount/interval here are metadata only — Shopify ignores them for managed pricing.
+  // The amount/interval here are metadata only — Shopify ignores them for managed
+  // pricing, so this must match whatever price is actually configured in the
+  // Partner/Dev Dashboard's Managed Pricing setup — changing it here alone
+  // does NOT change what merchants are charged.
   billing: {
     [PLANS.PRO]: {
       lineItems: [
         {
-          amount: 9.99,
+          amount: 49,
           currencyCode: "USD",
           interval: BillingInterval.Every30Days,
         },

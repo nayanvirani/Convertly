@@ -249,7 +249,7 @@ async function renderDashboardBody(adminPath: string, resultBanner: string): Pro
   const proCount = shops.filter((s) => s.isPro).length;
   const trialCount = shops.filter((s) => s.trialActive).length;
   const freeCount = total - proCount;
-  const mrr = proCount * 9.99;
+  const mrr = proCount * 49;
   const needsMigration = shops.some((s) => s.accessToken && !s.refreshToken);
 
   const rows = shops
