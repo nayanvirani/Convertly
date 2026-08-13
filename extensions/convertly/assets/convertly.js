@@ -197,8 +197,9 @@
   }
 
   function renderTimer(s) {
-    if (!isProductPage()) return;
-
+    // A merchant-placed block wins outright, on whatever page it was put on
+    // (homepage sale countdown, a collection page, anywhere) — placement is
+    // an explicit choice and should never be second-guessed.
     var mounts = document.querySelectorAll('[data-convertly-widget="timer"]');
     if (mounts.length) {
       mounts.forEach(function (mount) {
@@ -210,6 +211,9 @@
       return;
     }
 
+    // No block placed — fall back to the auto-placement heuristic, which
+    // only makes sense on product pages since it anchors to the buy-now form.
+    if (!isProductPage()) return;
     var anchor = findAnchor(s.anchorSelector);
     if (!anchor) return;
     var el = buildTimerElement(s);
