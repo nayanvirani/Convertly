@@ -1,7 +1,7 @@
 import type { MetaFunction } from "@remix-run/node";
 
 export const meta: MetaFunction = () => [
-  { title: "Privacy Policy — Boostify" },
+  { title: "Privacy Policy — Convertly" },
 ];
 
 export default function Privacy() {
@@ -22,9 +22,9 @@ export default function Privacy() {
       {/* Nav */}
       <header style={{ background: "#fff", borderBottom: "1px solid #E3DDD5", padding: "0 2rem" }}>
         <div style={{ maxWidth: 760, margin: "0 auto", display: "flex", alignItems: "center", gap: 12, height: 56 }}>
-          <img src="/logo.png" alt="Boostify" width={28} height={28} style={{ borderRadius: 7 }} />
+          <img src="/logo.png" alt="Convertly" width={28} height={28} style={{ borderRadius: 7 }} />
           <a href="/" style={{ fontWeight: 700, fontSize: "0.95rem", color: "#18150F", textDecoration: "none" }}>
-            Boostify
+            Convertly
           </a>
         </div>
       </header>
@@ -34,14 +34,14 @@ export default function Privacy() {
         <p style={{ fontSize: "0.8125rem", color: "#7B7367", marginBottom: "0.5rem" }}>Last updated: July 30, 2025</p>
         <h1>Privacy Policy</h1>
         <p style={{ marginTop: "1rem" }}>
-          This Privacy Policy describes how Boostify ("we", "our", or "the app") collects, uses, and protects
+          This Privacy Policy describes how Convertly ("we", "our", or "the app") collects, uses, and protects
           information when you install and use our Shopify app.
         </p>
 
         <hr />
 
         <h2>1. Information We Collect</h2>
-        <p>When you install Boostify, we collect the following information through the Shopify API:</p>
+        <p>When you install Convertly, we collect the following information through the Shopify API:</p>
         <ul>
           <li><strong>Shop domain and store information</strong> — your myshopify.com domain, store name, and timezone.</li>
           <li><strong>Access tokens</strong> — OAuth tokens issued by Shopify that allow the app to interact with your store on your behalf. These are stored securely in our database.</li>
@@ -124,7 +124,7 @@ export default function Privacy() {
 
         <hr />
         <p style={{ fontSize: "0.8125rem", color: "#7B7367" }}>
-          © {new Date().getFullYear()} Boostify. All rights reserved.
+          © {new Date().getFullYear()} Convertly. All rights reserved.
         </p>
       </main>
     </div>

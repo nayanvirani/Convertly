@@ -47,7 +47,7 @@ if (ADMIN_PATH) {
       verifyAdminCredentials(username, password)
         .then((ok) => {
           if (!ok) {
-            res.set("WWW-Authenticate", 'Basic realm="Boostify Admin"');
+            res.set("WWW-Authenticate", 'Basic realm="Convertly Admin"');
             res.status(401).send("Authentication required.");
             return;
           }
@@ -60,7 +60,7 @@ if (ADMIN_PATH) {
         });
       return;
     }
-    res.set("WWW-Authenticate", 'Basic realm="Boostify Admin"');
+    res.set("WWW-Authenticate", 'Basic realm="Convertly Admin"');
     res.status(401).send("Authentication required.");
   });
 
@@ -80,7 +80,7 @@ if (ADMIN_PATH) {
   // Sign-out: POSTs here always return 401 to clear the browser's cached
   // Basic Auth credentials.
   app.post(`${ADMIN_PATH}-logout`, (_req, res) => {
-    res.set("WWW-Authenticate", 'Basic realm="Boostify Admin"');
+    res.set("WWW-Authenticate", 'Basic realm="Convertly Admin"');
     res.status(401).send("Logged out.");
   });
 } else {
@@ -103,5 +103,5 @@ app.all("*", createRequestHandler({ build }));
 
 const port = parseInt(process.env.PORT || "3000");
 app.listen(port, () => {
-  console.log(`Boostify listening on http://localhost:${port}`);
+  console.log(`Convertly listening on http://localhost:${port}`);
 });

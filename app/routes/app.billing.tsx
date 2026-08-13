@@ -80,7 +80,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const justChanged = handle !== "";
 
   const shopName = session.shop.replace(".myshopify.com", "");
-  const appHandle = process.env.SHOPIFY_APP_HANDLE ?? "conversion-booster-11";
+  // "convertly" is a best-guess placeholder — verify the real Partner/Dev
+  // Dashboard app handle via `shopify app info` once linked, and set
+  // SHOPIFY_APP_HANDLE in .env if it differs.
+  const appHandle = process.env.SHOPIFY_APP_HANDLE ?? "convertly";
   const pricingUrl = `https://admin.shopify.com/store/${shopName}/charges/${appHandle}/pricing_plans`;
 
   // Regular page load, no plan change in flight — trust Postgres (kept
@@ -167,7 +170,7 @@ export default function BillingPage() {
                 <List.Item>Announcement Bar</List.Item>
                 <List.Item>Trust Badges</List.Item>
                 <List.Item>Countdown Timer</List.Item>
-                <List.Item>&quot;Powered by Boostify&quot; branding</List.Item>
+                <List.Item>&quot;Powered by Convertly&quot; branding</List.Item>
               </List>
             </BlockStack>
           </Card>

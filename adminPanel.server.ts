@@ -35,7 +35,7 @@ function layout(opts: { title: string; badge: string; adminPath: string; body: s
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="robots" content="noindex, nofollow" />
-<title>${esc(opts.title)} — Boostify</title>
+<title>${esc(opts.title)} — Convertly</title>
 <style>
   * { box-sizing: border-box; }
   body {
@@ -125,7 +125,7 @@ function layout(opts: { title: string; badge: string; adminPath: string; body: s
 <body>
 <header>
   <div class="header-left">
-    <span class="header-title">Boostify</span>
+    <span class="header-title">Convertly</span>
     <span class="badge">${esc(opts.badge)}</span>
   </div>
   <div style="display:flex; align-items:center; gap:10px;">
@@ -281,7 +281,7 @@ export async function renderExport(_req: Request, res: Response) {
   const csv = enrichedShopsToCSV(shops);
   const date = new Date().toISOString().split("T")[0];
   res.set("Content-Type", "text/csv; charset=utf-8");
-  res.set("Content-Disposition", `attachment; filename="boostify-shops-${date}.csv"`);
+  res.set("Content-Disposition", `attachment; filename="convertly-shops-${date}.csv"`);
   res.send(csv);
 }
 

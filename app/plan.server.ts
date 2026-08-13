@@ -25,7 +25,7 @@ export async function updatePlanMetafield(
   try {
     const result = await admin.graphql(
       `#graphql
-      mutation SetBoostifyMetafields($ownerId: ID!, $plan: String!, $apiBase: String!) {
+      mutation SetConvertlyMetafields($ownerId: ID!, $plan: String!, $apiBase: String!) {
         metafieldsSet(metafields: [
           {
             ownerId: $ownerId

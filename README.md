@@ -1,11 +1,11 @@
-# Boostify — Shopify conversion widget suite
+# Convertly — Shopify conversion widget suite
 
-All-in-one conversion widget suite: Announcement Bar, Countdown Timer, Trust Badges, Sticky Add-to-Cart, and Social Proof Popup. Built as a **Theme App Extension** with a **single app embed** — the merchant enables Boostify in their theme once, and every widget is then turned on/off and configured from the app's own dashboard (Postgres-backed), not from Shopify theme-editor settings panels.
+All-in-one conversion widget suite: Announcement Bar, Countdown Timer, Trust Badges, Sticky Add-to-Cart, and Social Proof Popup. Built as a **Theme App Extension** with a **single app embed** — the merchant enables Convertly in their theme once, and every widget is then turned on/off and configured from the app's own dashboard (Postgres-backed), not from Shopify theme-editor settings panels.
 
 ## What's inside
 
 ```
-extensions/conversion-booster/
+extensions/convertly/
 ├── shopify.extension.toml
 ├── blocks/
 │   └── boostify.liquid           the one app embed — injects config + boostify.js
@@ -15,7 +15,7 @@ extensions/conversion-booster/
                                     widgets are enabled, entirely client-side
 ```
 
-`boostify.js` fetches per-shop widget config (`app/routes/api.widgets-config.tsx`) from this app's own backend and renders each enabled widget's DOM/behavior itself — there's no per-widget Liquid schema anymore. Merchants configure everything (text, colors, which collection, on/off) from **Boostify → Dashboard → Configure** inside the embedded app (`app/routes/app.widgets.$key.tsx`), backed by the `widget_settings` table in Postgres. See `app/widgets.ts` for the full settings shape per widget.
+`boostify.js` fetches per-shop widget config (`app/routes/api.widgets-config.tsx`) from this app's own backend and renders each enabled widget's DOM/behavior itself — there's no per-widget Liquid schema anymore. Merchants configure everything (text, colors, which collection, on/off) from **Convertly → Dashboard → Configure** inside the embedded app (`app/routes/app.widgets.$key.tsx`), backed by the `widget_settings` table in Postgres. See `app/widgets.ts` for the full settings shape per widget.
 
 Countdown Timer and Trust Badges (previously drag-and-place app blocks) are now placed via a JS heuristic — next to the buy-now form on product pages by default, with an optional CSS-selector override per widget if a theme's markup doesn't match.
 
@@ -33,10 +33,10 @@ Countdown Timer and Trust Badges (previously drag-and-place app blocks) are now 
 2. Create the app shell and drop the extension in:
    ```bash
    shopify app init            # choose "Start with Remix" (or the minimal template)
-   # copy the extensions/conversion-booster folder from this project into your app's extensions/
+   # copy the extensions/convertly folder from this project into your app's extensions/
    shopify app dev             # opens a tunnel + installs on your dev store
    ```
-3. In the dev store: **Online Store → Themes → Customize → App embeds** — toggle on **Boostify** (once — this covers every widget). Then, in the embedded app dashboard, open each widget's **Configure** page to turn it on and set its text/colors/etc.
+3. In the dev store: **Online Store → Themes → Customize → App embeds** — toggle on **Convertly** (once — this covers every widget). Then, in the embedded app dashboard, open each widget's **Configure** page to turn it on and set its text/colors/etc.
 
 ## Before submitting to the App Store
 

@@ -1,5 +1,5 @@
 // Public analytics tracking endpoint.
-// Called by Boostify theme extension widgets on the merchant's storefront.
+// Called by Convertly theme extension widgets on the merchant's storefront.
 //
 // Method:  POST application/x-www-form-urlencoded  (no CORS preflight)
 // Fields:  shop   — permanent myshopify.com domain

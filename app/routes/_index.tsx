@@ -10,7 +10,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export const meta: MetaFunction = () => [
-  { title: "Boostify — 5 Shopify Widgets, One Install" },
+  { title: "Convertly — 5 Shopify Widgets, One Install" },
   {
     name: "description",
     content:
@@ -18,13 +18,15 @@ export const meta: MetaFunction = () => [
   },
 ];
 
-const APP_STORE_URL = "https://apps.shopify.com/conversion-booster-4";
+// Placeholder — the real App Store listing URL only exists once the app is
+// actually published; update this once you have it.
+const APP_STORE_URL = "https://apps.shopify.com/convertly";
 
 function Logo() {
   return (
     <img
       src="/logo.png"
-      alt="Boostify"
+      alt="Convertly"
       width={32}
       height={32}
       style={{ borderRadius: 7, display: "block", flexShrink: 0 }}
@@ -100,7 +102,7 @@ export default function Index() {
         <header className="nav">
           <a href="/" className="nav__brand">
             <Logo />
-            <span className="nav__name">Boostify</span>
+            <span className="nav__name">Convertly</span>
           </a>
           <nav className="nav__links" aria-label="Site navigation">
             <a href="#widgets">Widgets</a>
@@ -293,7 +295,7 @@ export default function Index() {
           <div className="footer__inner">
             <a href="/" className="nav__brand">
               <Logo />
-              <span className="nav__name">Boostify</span>
+              <span className="nav__name">Convertly</span>
             </a>
             <p className="footer__line">
               Built for Shopify merchants who want more sales without more apps.

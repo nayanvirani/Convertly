@@ -106,10 +106,10 @@ export default function Index() {
                   marginBottom: "4px",
                 }}
               >
-                Welcome to Boostify
+                Welcome to Convertly
               </div>
               <div style={{ color: "#94a3b8", fontSize: "13px" }}>
-                Step 1: enable Boostify in your theme (once). Step 2: turn on widgets below.
+                Step 1: enable Convertly in your theme (once). Step 2: turn on widgets below.
               </div>
             </div>
           </div>
