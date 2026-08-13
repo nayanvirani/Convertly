@@ -280,11 +280,38 @@ export async function getWidgetSettings<K extends WidgetKey>(
   }
 }
 
+/**
+ * Save a widget's settings fields only — does NOT touch `enabled`. That's
+ * deliberately its own separate control now (see setWidgetEnabled below),
+ * so saving text/color/etc. fields here can never accidentally flip a
+ * widget off (or on) as a side effect.
+ */
 export async function upsertWidgetSettings<K extends WidgetKey>(
   shop: string,
   widget: K,
-  enabled: boolean,
   settings: WidgetSettingsMap[K]
+): Promise<void> {
+  await ready();
+  await pool().query(
+    `INSERT INTO widget_settings (shop, widget, enabled, settings, updated_at)
+     VALUES ($1, $2, false, $3, now())
+     ON CONFLICT (shop, widget) DO UPDATE
+       SET settings = excluded.settings,
+           updated_at = now()`,
+    [shop, widget, JSON.stringify(settings)]
+  );
+}
+
+/**
+ * Flip a widget's enabled flag only — used by the dashboard's instant-save
+ * toggle, independent of the rest of that widget's settings form. Seeds
+ * `settings` with defaults if this is the first time this widget has ever
+ * been touched for this shop (no row yet); leaves it untouched otherwise.
+ */
+export async function setWidgetEnabled<K extends WidgetKey>(
+  shop: string,
+  widget: K,
+  enabled: boolean
 ): Promise<void> {
   await ready();
   await pool().query(
@@ -292,9 +319,8 @@ export async function upsertWidgetSettings<K extends WidgetKey>(
      VALUES ($1, $2, $3, $4, now())
      ON CONFLICT (shop, widget) DO UPDATE
        SET enabled = excluded.enabled,
-           settings = excluded.settings,
            updated_at = now()`,
-    [shop, widget, enabled, JSON.stringify(settings)]
+    [shop, widget, enabled, JSON.stringify(WIDGET_DEFAULTS[widget])]
   );
 }
 

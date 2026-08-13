@@ -1,6 +1,6 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { json, redirect } from "@remix-run/node";
-import { Form, useActionData, useLoaderData, useNavigation } from "@remix-run/react";
+import { Form, useActionData, useFetcher, useLoaderData, useNavigation } from "@remix-run/react";
 import {
   Banner,
   BlockStack,
@@ -16,7 +16,7 @@ import {
 } from "@shopify/polaris";
 import { useState } from "react";
 import { authenticate } from "../shopify.server";
-import { getShopPlan, getWidgetSettings, upsertWidgetSettings } from "../db.server";
+import { getShopPlan, getWidgetSettings, setWidgetEnabled, upsertWidgetSettings } from "../db.server";
 import {
   isWidgetKey,
   WIDGET_META,
@@ -57,7 +57,18 @@ export async function action({ request, params }: ActionFunctionArgs) {
   }
 
   const form = await request.formData();
-  const enabled = form.get("enabled") === "on";
+
+  // Instant-save toggle from the dashboard/settings-page switch — separate
+  // from the full settings form below, and deliberately explicit
+  // ("true"/"false" sent directly by JS) rather than relying on a checkbox's
+  // presence-or-absence in the form body, so there's no ambiguity about
+  // what got submitted.
+  if (form.get("intent") === "toggle") {
+    const enabled = form.get("enabled") === "true";
+    await setWidgetEnabled(session.shop, key, enabled);
+    return json({ ok: true, enabled });
+  }
+
   const num = (name: string, fallback: number) => {
     const v = Number(form.get(name));
     return Number.isFinite(v) ? v : fallback;
@@ -146,7 +157,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
     }
   }
 
-  await upsertWidgetSettings(session.shop, key, enabled, settings as never);
+  await upsertWidgetSettings(session.shop, key, settings as never);
   return redirect(`/app/widgets/${key}?saved=1`);
 }
 
@@ -161,7 +172,7 @@ export default function WidgetSettings() {
   const locked = meta.proOnly && !isPro;
 
   return (
-    <Page title={`${meta.emoji} ${meta.name}`} backAction={{ url: "/app" }}>
+    <Page title={`${meta.emoji} ${meta.name}`} subtitle={meta.desc} backAction={{ url: "/app" }}>
       <BlockStack gap="400">
         {locked && (
           <Banner tone="warning" title="Pro plan required">
@@ -169,24 +180,29 @@ export default function WidgetSettings() {
           </Banner>
         )}
         {saved && !actionData && (
-          <Banner tone="success">
-            Saved — {enabled ? "this widget is now enabled." : "this widget is currently off (Enabled is unchecked)."}
-          </Banner>
+          <Banner tone="success">Settings saved.</Banner>
         )}
         {actionData && "message" in actionData && (
           <Banner tone="critical">{actionData.message}</Banner>
         )}
 
-        {/* Keyed by the actual loaded data so the whole form (the Enabled
-            checkbox and every field's local state below) remounts fresh
-            whenever the server's data changes, instead of Remix reusing the
-            same component instance across the Save → redirect → reload
-            cycle and leaving stale, already-submitted values on screen. */}
+        {/* Its own instant-save control — checking/unchecking this posts
+            immediately (see the "toggle" intent in the action) and shows
+            its own confirmation, entirely independent of the Save button
+            below. No more "did I remember to click Save" ambiguity for the
+            one field that matters most. Keyed by widget so switching
+            between widget pages always starts from a clean, un-stale
+            fetcher state. */}
+        <EnabledToggle key={key} widgetKey={key as WidgetKey} meta={meta} enabled={enabled} locked={locked} />
+
+        {/* Keyed by the actual loaded data so every field below remounts
+            fresh whenever the server's data changes, instead of Remix
+            reusing the same component instance across the Save → redirect
+            → reload cycle and leaving stale, already-submitted values on
+            screen. */}
         <SettingsForm
           key={JSON.stringify({ enabled, settings })}
           widgetKey={key as WidgetKey}
-          meta={meta}
-          enabled={enabled}
           settings={settings}
           locked={locked}
           saving={saving}
@@ -196,38 +212,71 @@ export default function WidgetSettings() {
   );
 }
 
-function SettingsForm({
+function EnabledToggle({
   widgetKey,
   meta,
   enabled,
+  locked,
+}: {
+  widgetKey: WidgetKey;
+  meta: (typeof WIDGET_META)[WidgetKey];
+  enabled: boolean;
+  locked: boolean;
+}) {
+  const fetcher = useFetcher<typeof action>();
+  // Prefer this toggle's own fetch result the instant it lands — don't wait
+  // for the full-page loader to catch up (it will, in the background, via
+  // Remix's automatic revalidation after a fetcher submission).
+  const current = fetcher.data && "enabled" in fetcher.data ? fetcher.data.enabled : enabled;
+  const busy = fetcher.state !== "idle";
+  const failed = fetcher.data && "ok" in fetcher.data && fetcher.data.ok === false;
+
+  function toggle(next: boolean) {
+    fetcher.submit({ intent: "toggle", enabled: String(next) }, { method: "post" });
+  }
+
+  return (
+    <Card>
+      <InlineStack align="space-between" blockAlign="center">
+        <BlockStack gap="050">
+          <Text as="h3" variant="bodyMd" fontWeight="semibold">
+            {current ? "Enabled — live on your storefront" : "Disabled"}
+          </Text>
+          <Text as="p" variant="bodySm" tone={failed ? "critical" : "subdued"}>
+            {failed
+              ? "message" in (fetcher.data as any) ? (fetcher.data as any).message : "Couldn't save — try again."
+              : busy
+                ? "Saving…"
+                : "Saves instantly — this switch doesn't need the Save button below."}
+          </Text>
+        </BlockStack>
+        <Checkbox
+          label={`${meta.name} enabled`}
+          labelHidden
+          checked={current}
+          onChange={toggle}
+          disabled={locked || busy}
+        />
+      </InlineStack>
+    </Card>
+  );
+}
+
+function SettingsForm({
+  widgetKey,
   settings,
   locked,
   saving,
 }: {
   widgetKey: WidgetKey;
-  meta: (typeof WIDGET_META)[WidgetKey];
-  enabled: boolean;
   settings: unknown;
   locked: boolean;
   saving: boolean;
 }) {
-  const [isEnabled, setIsEnabled] = useState(enabled);
-
   return (
     <Card>
       <Form method="post">
         <BlockStack gap="400">
-          <InlineStack align="space-between" blockAlign="center">
-            <Text as="p" variant="bodySm" tone="subdued">{meta.desc}</Text>
-            <Checkbox
-              label="Enabled"
-              checked={isEnabled}
-              onChange={setIsEnabled}
-              name="enabled"
-              disabled={locked}
-            />
-          </InlineStack>
-
           {widgetKey === "bar" && <BarFields settings={settings as BarSettings} disabled={locked} />}
           {widgetKey === "timer" && <TimerFields settings={settings as TimerSettings} disabled={locked} />}
           {widgetKey === "trust" && <TrustFields settings={settings as TrustSettings} disabled={locked} />}
