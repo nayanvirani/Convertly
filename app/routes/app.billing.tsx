@@ -80,10 +80,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const justChanged = handle !== "";
 
   const shopName = session.shop.replace(".myshopify.com", "");
-  // "convertly" is a best-guess placeholder — verify the real Partner/Dev
-  // Dashboard app handle via `shopify app info` once linked, and set
-  // SHOPIFY_APP_HANDLE in .env if it differs.
-  const appHandle = process.env.SHOPIFY_APP_HANDLE ?? "convertly";
+  const appHandle = process.env.SHOPIFY_APP_HANDLE ?? "convertly-17";
   const pricingUrl = `https://admin.shopify.com/store/${shopName}/charges/${appHandle}/pricing_plans`;
 
   // Regular page load, no plan change in flight — trust Postgres (kept

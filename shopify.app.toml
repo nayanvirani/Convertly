@@ -1,18 +1,12 @@
 # Learn more about configuring your app at https://shopify.dev/docs/apps/build/cli-for-apps/app-configuration
-#
-# `handle` is still a placeholder: it's the app's slug in the Partner/Dev
-# Dashboard pricing-plan URL (used in app/routes/app.billing.tsx) — verify
-# the real one via `shopify app info` after linking and update it (or set
-# SHOPIFY_APP_HANDLE in .env, which overrides this) if it differs.
 
 client_id = "bfe506e04a6f75130679e63cd1452875"
 name = "Convertly"
-handle = ""
+handle = "convertly-17"
 application_url = "https://convertly-production-76b4.up.railway.app"
 embedded = true
 
 [build]
-include_config_on_deploy = true
 
 [access_scopes]
 # No merchant-granted scopes are required right now. Every Admin API call
