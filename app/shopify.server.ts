@@ -36,12 +36,15 @@ const shopify = shopifyApp({
   // "shopify_sessions" table of the Postgres database at DATABASE_URL.
   sessionStorage: new PostgreSQLSessionStorage(process.env.DATABASE_URL),
   distribution: AppDistribution.AppStore,
-  // Billing config enables billing.check() so we can verify plan status.
-  // billing.request() is still handled by Shopify Managed Pricing (Partner Dashboard).
-  // The amount/interval here are metadata only — Shopify ignores them for managed
-  // pricing, so this must match whatever price is actually configured in the
-  // Partner/Dev Dashboard's Managed Pricing setup — changing it here alone
-  // does NOT change what merchants are charged.
+  // Billing config is metadata only — this app doesn't call billing.check()
+  // (its own subscription checks in app.billing.tsx/webhooks.tsx/
+  // admin.server.ts key off subscription status, not amount/interval, so
+  // they work correctly for monthly AND annual without caring which one a
+  // merchant picked). The actual checkout/pricing page is entirely hosted
+  // and configured by Shopify Managed Pricing in the Partner/Dev Dashboard
+  // — set the Pro plan there to "Monthly with yearly discount", Monthly
+  // charge $49, Yearly charge $530. Changing the values below does NOT
+  // change what merchants are actually charged.
   billing: {
     [PLANS.PRO]: {
       lineItems: [
@@ -49,6 +52,11 @@ const shopify = shopifyApp({
           amount: 49,
           currencyCode: "USD",
           interval: BillingInterval.Every30Days,
+        },
+        {
+          amount: 530,
+          currencyCode: "USD",
+          interval: BillingInterval.Annual,
         },
       ],
     },

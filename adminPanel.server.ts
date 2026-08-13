@@ -249,6 +249,11 @@ async function renderDashboardBody(adminPath: string, resultBanner: string): Pro
   const proCount = shops.filter((s) => s.isPro).length;
   const trialCount = shops.filter((s) => s.trialActive).length;
   const freeCount = total - proCount;
+  // Approximation only — we track plan (pro/free), not billing interval, so
+  // this assumes every Pro shop is on the $49/mo plan. A shop on the
+  // $530/yr plan actually contributes ~$44.17/mo equivalent, not $49; this
+  // will over-count once annual subscribers exist. Labeled "approx." below
+  // rather than silently showing a precise-looking wrong number.
   const mrr = proCount * 49;
   const needsMigration = shops.some((s) => s.accessToken && !s.refreshToken);
 
@@ -274,7 +279,7 @@ async function renderDashboardBody(adminPath: string, resultBanner: string): Pro
       <div class="stat-card"><div class="stat-label">Pro Subscribers</div><div class="stat-value" style="color:#7C3AED;">${proCount}</div></div>
       <div class="stat-card"><div class="stat-label">Free Users</div><div class="stat-value" style="color:#B45309;">${freeCount}</div></div>
       <div class="stat-card"><div class="stat-label">On Trial</div><div class="stat-value" style="color:#0E7490;">${trialCount}</div></div>
-      <div class="stat-card"><div class="stat-label">MRR</div><div class="stat-value text" style="color:#15803D;">$${mrr.toFixed(2)}</div></div>
+      <div class="stat-card"><div class="stat-label">MRR (approx.)</div><div class="stat-value text" style="color:#15803D;">$${mrr.toFixed(2)}</div></div>
     </div>
 
     ${resultBanner}

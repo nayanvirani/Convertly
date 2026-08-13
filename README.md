@@ -55,4 +55,4 @@ Countdown Timer and Trust Badges also ship as real, merchant-placeable app block
 ## Pricing suggestion
 
 - **Free** — Announcement bar + trust badges, small "Powered by" link
-- **Pro $49/mo** — everything, no branding, priority support, 7-day trial
+- **Pro $49/mo or $530/yr** (~10% off annual) — everything, no branding, priority support, 7-day trial
