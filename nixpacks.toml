@@ -1,0 +1,10 @@
+[phases.setup]
+nixPkgs = ["nodejs_20"]
+
+[phases.build]
+# @remix-run/dev and vite are in dependencies (not devDependencies) so that
+# Railway's standard npm ci always installs them regardless of NODE_ENV.
+cmds = ["npm ci", "npm run build"]
+
+[start]
+cmd = "npm start"

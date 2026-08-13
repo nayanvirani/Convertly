@@ -1,0 +1,65 @@
+# Learn more about configuring your app at https://shopify.dev/docs/apps/build/cli-for-apps/app-configuration
+#
+# application_url and auth.redirect_urls are populated automatically by
+# `shopify app config link` / `shopify app dev` once there's a real APP URL
+# (Railway, once deployed) — left blank until then rather than guessing at a
+# fake domain. `handle` is also a placeholder: it's the app's slug in the
+# Partner/Dev Dashboard pricing-plan URL (used in app/routes/app.billing.tsx)
+# — verify the real one via `shopify app info` after linking and update it
+# (or set SHOPIFY_APP_HANDLE in .env, which overrides this) if it differs.
+
+client_id = "bfe506e04a6f75130679e63cd1452875"
+name = "Convertly"
+handle = ""
+application_url = ""
+embedded = true
+
+[build]
+include_config_on_deploy = true
+
+[access_scopes]
+# No merchant-granted scopes are required right now. Every Admin API call
+# this app makes (currentAppInstallation, activeSubscriptions,
+# appSubscriptionCancel, metafieldsSet on the app's own installation) is
+# part of the app's own billing/installation relationship with the shop,
+# which Shopify exposes to any authenticated app regardless of granted
+# scopes — it's not shop-resource data. If a future feature reads shop
+# resources (products, orders, etc.) add the scope it needs here then.
+scopes = ""
+use_legacy_install_flow = false
+
+[auth]
+redirect_urls = []
+
+[webhooks]
+api_version = "2026-07"
+
+  # Fires when the merchant changes plan (Free <-> Pro) or a subscription's
+  # status otherwise changes. This is what actually keeps Postgres in sync —
+  # see app/routes/webhooks.tsx — instead of polling the Admin API on every
+  # page load.
+  [[webhooks.subscriptions]]
+  topics = ["app_subscriptions/update"]
+  uri = "/webhooks"
+
+  # Fires when the merchant's granted access scopes change. We don't require
+  # any scopes today, so this is purely observability for when that changes.
+  [[webhooks.subscriptions]]
+  topics = ["app/scopes_update"]
+  uri = "/webhooks"
+
+  # Cleans up all shop-scoped rows (sessions, plan, widget settings) on
+  # uninstall — see the APP_UNINSTALLED handler in app/routes/webhooks.tsx.
+  [[webhooks.subscriptions]]
+  topics = ["app/uninstalled"]
+  uri = "/webhooks"
+
+  # Mandatory for every App Store app. This app stores no customer PII —
+  # widget settings are shop-level, not customer-level — so these are
+  # acknowledged with a 200 and no data action.
+  [[webhooks.subscriptions]]
+  compliance_topics = ["customers/data_request", "customers/redact", "shop/redact"]
+  uri = "/webhooks"
+
+[pos]
+embedded = false

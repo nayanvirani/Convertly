@@ -1,0 +1,45 @@
+{
+  "name": "conversion-booster",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "remix vite:build",
+    "dev": "shopify app dev",
+    "deploy": "shopify app deploy",
+    "config:link": "shopify app config link",
+    "generate": "shopify app generate",
+    "start": "cross-env NODE_ENV=production tsx server.ts",
+    "typecheck": "tsc --noEmit",
+    "admin:create-user": "tsx scripts/create-admin-user.ts"
+  },
+  "dependencies": {
+    "@remix-run/dev": "^2.16.3",
+    "@remix-run/express": "^2.16.3",
+    "@remix-run/node": "^2.16.3",
+    "@remix-run/react": "^2.16.3",
+    "@shopify/app-bridge-react": "^4.1.6",
+    "@shopify/polaris": "^13.9.5",
+    "@shopify/shopify-app-remix": "^4.2.1",
+    "@shopify/shopify-app-session-storage-postgresql": "^6.0.1",
+    "cross-env": "^7.0.3",
+    "express": "^4.21.2",
+    "isbot": "^5.1.17",
+    "pg": "^8.22.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tsx": "^4.19.2",
+    "vite": "^5.4.11",
+    "vite-tsconfig-paths": "^5.1.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.0.0",
+    "@types/pg": "^8.20.0",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "typescript": "^5.7.2"
+  },
+  "workspaces": [
+    "extensions/*"
+  ]
+}
