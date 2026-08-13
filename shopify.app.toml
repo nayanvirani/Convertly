@@ -1,17 +1,14 @@
 # Learn more about configuring your app at https://shopify.dev/docs/apps/build/cli-for-apps/app-configuration
 #
-# application_url and auth.redirect_urls are populated automatically by
-# `shopify app config link` / `shopify app dev` once there's a real APP URL
-# (Railway, once deployed) — left blank until then rather than guessing at a
-# fake domain. `handle` is also a placeholder: it's the app's slug in the
-# Partner/Dev Dashboard pricing-plan URL (used in app/routes/app.billing.tsx)
-# — verify the real one via `shopify app info` after linking and update it
-# (or set SHOPIFY_APP_HANDLE in .env, which overrides this) if it differs.
+# `handle` is still a placeholder: it's the app's slug in the Partner/Dev
+# Dashboard pricing-plan URL (used in app/routes/app.billing.tsx) — verify
+# the real one via `shopify app info` after linking and update it (or set
+# SHOPIFY_APP_HANDLE in .env, which overrides this) if it differs.
 
 client_id = "bfe506e04a6f75130679e63cd1452875"
 name = "Convertly"
 handle = ""
-application_url = ""
+application_url = "https://convertly-production-76b4.up.railway.app"
 embedded = true
 
 [build]
@@ -29,7 +26,11 @@ scopes = ""
 use_legacy_install_flow = false
 
 [auth]
-redirect_urls = []
+redirect_urls = [
+  "https://convertly-production-76b4.up.railway.app/auth/callback",
+  "https://convertly-production-76b4.up.railway.app/auth/shopify/callback",
+  "https://convertly-production-76b4.up.railway.app/api/auth/callback"
+]
 
 [webhooks]
 api_version = "2026-07"
