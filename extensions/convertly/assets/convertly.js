@@ -231,7 +231,7 @@
     css += '@keyframes cbmarquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }';
     var mob = s.mobileLayout;
     if (mob && mob !== 'same') {
-      css += '@media (max-width:480px){';
+      css += '@media (max-width:749px){';
       if (mob === 'vertical') {
         css += '#' + bid + ' .cb-trust{flex-direction:column!important;align-items:flex-start;animation:none!important;} #' + bid + ' .cb-trust--dupe{display:none!important;}';
       } else if (mob === 'horizontal') {
