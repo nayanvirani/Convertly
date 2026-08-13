@@ -220,17 +220,24 @@
       css += '#' + bid + ' .cb-trust { flex-direction: column; align-items: flex-start; }';
     } else if (s.layout === 'scroll') {
       css += '#' + bid + ' { overflow: hidden; } #' + bid + ' .cb-trust-track { display:flex; width:max-content; animation: cbmarquee ' + s.scrollSpeed + 's linear infinite; } #' + bid + ' .cb-trust { flex-wrap: nowrap; } #' + bid + ' .cb-trust-track:hover { animation-play-state: paused; }';
+    } else if (needsScroll) {
+      // Desktop itself isn't scroll mode, but the DOM still has the
+      // duplicate list (built below) because *mobile* needs it for its
+      // marquee loop. Hide that duplicate by default so it doesn't just
+      // show up as a second, un-animated row on desktop — the mobile-only
+      // media query below un-hides it again where it's actually needed.
+      css += '#' + bid + ' .cb-trust--dupe { display: none; }';
     }
     css += '@keyframes cbmarquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }';
     var mob = s.mobileLayout;
     if (mob && mob !== 'same') {
       css += '@media (max-width:480px){';
       if (mob === 'vertical') {
-        css += '#' + bid + ' .cb-trust{flex-direction:column!important;align-items:flex-start;animation:none!important;} #' + bid + ' .cb-trust--dupe{display:none;}';
+        css += '#' + bid + ' .cb-trust{flex-direction:column!important;align-items:flex-start;animation:none!important;} #' + bid + ' .cb-trust--dupe{display:none!important;}';
       } else if (mob === 'horizontal') {
-        css += '#' + bid + ' .cb-trust{flex-direction:row!important;flex-wrap:wrap!important;animation:none!important;} #' + bid + ' .cb-trust--dupe{display:none;}';
+        css += '#' + bid + ' .cb-trust{flex-direction:row!important;flex-wrap:wrap!important;animation:none!important;} #' + bid + ' .cb-trust--dupe{display:none!important;}';
       } else if (mob === 'scroll' && s.layout !== 'scroll') {
-        css += '#' + bid + '{overflow:hidden;} #' + bid + ' .cb-trust-track{display:flex;width:max-content;animation:cbmarquee ' + s.scrollSpeed + 's linear infinite;} #' + bid + ' .cb-trust{flex-direction:row!important;flex-wrap:nowrap!important;}';
+        css += '#' + bid + '{overflow:hidden;} #' + bid + ' .cb-trust-track{display:flex;width:max-content;animation:cbmarquee ' + s.scrollSpeed + 's linear infinite;} #' + bid + ' .cb-trust{flex-direction:row!important;flex-wrap:nowrap!important;} #' + bid + ' .cb-trust--dupe{display:flex!important;}';
       }
       css += '}';
     }
