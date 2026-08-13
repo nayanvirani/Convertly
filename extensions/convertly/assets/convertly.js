@@ -206,6 +206,11 @@
   // ─── Trust badges ─────────────────────────────────────────────────────────
   // Same placed-block-first, heuristic-fallback pattern as the timer above.
   var trustInstanceCount = 0;
+  // Gap between marquee copies (matches the gap between badges within one
+  // copy, from .cb-trust's own `gap` in cb-core.css) — shared with
+  // fillMarqueeTrack()'s shift-percentage math below so the two stay in
+  // sync instead of drifting if one gets tweaked without the other.
+  var MARQUEE_GAP = 20;
 
   function buildTrustElement(s, badges) {
     var bid = 'cb-trust-' + (trustInstanceCount++);
@@ -224,7 +229,7 @@
       // track (percentage shift x total track width = one copy's pixel
       // width, always) — see fillMarqueeTrack() below, which decides how
       // many copies are actually needed and sets --cb-marquee-shift.
-      css += '#' + bid + ' { overflow: hidden; } #' + bid + ' .cb-trust-track { display:flex; width:max-content; animation: cbmarquee ' + s.scrollSpeed + 's linear infinite; } #' + bid + ' .cb-trust { flex-wrap: nowrap; flex: none; } #' + bid + ' .cb-trust-track:hover { animation-play-state: paused; }';
+      css += '#' + bid + ' { overflow: hidden; } #' + bid + ' .cb-trust-track { display:flex; gap:' + MARQUEE_GAP + 'px; width:max-content; animation: cbmarquee ' + s.scrollSpeed + 's linear infinite; } #' + bid + ' .cb-trust { flex-wrap: nowrap; flex: none; } #' + bid + ' .cb-trust-track:hover { animation-play-state: paused; }';
     }
     if (needsScroll && s.layout !== 'scroll') {
       // Desktop layout itself isn't scroll mode (it's 'horizontal',
@@ -251,7 +256,7 @@
       } else if (mob === 'horizontal') {
         css += '#' + bid + ' .cb-trust{flex-direction:row!important;flex-wrap:wrap!important;animation:none!important;} #' + bid + ' .cb-trust-track{display:block!important;width:auto!important;animation:none!important;overflow:visible!important;} #' + bid + ' .cb-trust--dupe{display:none!important;}';
       } else if (mob === 'scroll' && s.layout !== 'scroll') {
-        css += '#' + bid + '{overflow:hidden;} #' + bid + ' .cb-trust-track{display:flex;width:max-content;animation:cbmarquee ' + s.scrollSpeed + 's linear infinite;} #' + bid + ' .cb-trust{flex-direction:row!important;flex-wrap:nowrap!important;flex:none!important;} #' + bid + ' .cb-trust--dupe{display:flex!important;}';
+        css += '#' + bid + '{overflow:hidden;} #' + bid + ' .cb-trust-track{display:flex;gap:' + MARQUEE_GAP + 'px;width:max-content;animation:cbmarquee ' + s.scrollSpeed + 's linear infinite;} #' + bid + ' .cb-trust{flex-direction:row!important;flex-wrap:nowrap!important;flex:none!important;} #' + bid + ' .cb-trust--dupe{display:flex!important;}';
       }
       css += '}';
     }
@@ -321,11 +326,15 @@
     var containerWidth = wrapEl.getBoundingClientRect().width;
     if (!singleWidth || !containerWidth) return;
 
+    // Each copy also has MARQUEE_GAP of track `gap` after it (except the
+    // very last one) — has to be counted, or a track with few, wide
+    // copies would still come up short of full coverage.
+    var step = singleWidth + MARQUEE_GAP; // one copy + the gap that follows it
     // +1 beyond the exact math as a safety margin — subpixel rounding and
     // measuring mid-layout (see the re-runs in renderTrust below) can
     // otherwise leave the count just barely short. Extra copies past what
     // overflow:hidden ever reveals cost nothing visually.
-    var copiesNeeded = Math.min(20, Math.max(2, Math.ceil((containerWidth * 2) / singleWidth) + 1));
+    var copiesNeeded = Math.min(20, Math.max(2, Math.ceil((containerWidth * 2 + MARQUEE_GAP) / step) + 1));
     var have = trackEl.children.length;
     for (var i = have; i < copiesNeeded; i++) {
       var clone = first.cloneNode(true);
@@ -333,10 +342,15 @@
       clone.setAttribute('aria-hidden', 'true');
       trackEl.appendChild(clone);
     }
-    // Percentage shift x total track width = one copy's pixel width no
-    // matter how many copies there are, so this keeps the configured
-    // scroll speed feeling the same regardless of content length.
-    trackEl.style.setProperty('--cb-marquee-shift', (-100 / copiesNeeded).toFixed(4) + '%');
+    // Shift by exactly one copy's width plus its trailing gap, expressed
+    // as a percentage of the track's actual measured total width —
+    // measuring the real total (rather than assuming every copy divides
+    // it evenly) keeps the loop seamless regardless of gap size or
+    // rounding.
+    var totalWidth = trackEl.getBoundingClientRect().width;
+    if (totalWidth) {
+      trackEl.style.setProperty('--cb-marquee-shift', (-100 * step / totalWidth).toFixed(4) + '%');
+    }
   }
 
   function renderTrust(s) {
