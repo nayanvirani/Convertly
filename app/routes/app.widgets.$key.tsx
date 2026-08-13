@@ -18,6 +18,7 @@ import { useState } from "react";
 import { authenticate } from "../shopify.server";
 import { getShopPlan, getWidgetSettings, setWidgetEnabled, upsertWidgetSettings } from "../db.server";
 import {
+  blockDeepLink,
   isWidgetKey,
   WIDGET_META,
   type BarSettings,
@@ -40,8 +41,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const isPro = plan === "pro";
   const row = await getWidgetSettings(session.shop, key);
   const saved = new URL(request.url).searchParams.get("saved") === "1";
+  const shop = session.shop;
+  const apiKey = process.env.SHOPIFY_API_KEY || "";
 
-  return json({ key, isPro, enabled: row.enabled, settings: row.settings, saved });
+  return json({ key, isPro, enabled: row.enabled, settings: row.settings, saved, shop, apiKey });
 }
 
 export async function action({ request, params }: ActionFunctionArgs) {
@@ -104,7 +107,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
         expiredText: str("expiredText", "Offer has ended"),
         bgColor: str("bgColor", "#fff3f0"),
         textColor: str("textColor", "#c1121f"),
-        anchorSelector: str("anchorSelector"),
       };
       settings = s;
       break;
@@ -128,7 +130,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
         iconSize: num("iconSize", 20),
         color: str("color", "#333333"),
         badges,
-        anchorSelector: str("anchorSelector"),
       };
       settings = s;
       break;
@@ -164,12 +165,13 @@ export async function action({ request, params }: ActionFunctionArgs) {
 // ─── UI ─────────────────────────────────────────────────────────────────────
 
 export default function WidgetSettings() {
-  const { key, isPro, enabled, settings, saved } = useLoaderData<typeof loader>();
+  const { key, isPro, enabled, settings, saved, shop, apiKey } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const nav = useNavigation();
   const saving = nav.state === "submitting";
   const meta = WIDGET_META[key as WidgetKey];
   const locked = meta.proOnly && !isPro;
+  const blockUrl = !locked ? blockDeepLink(shop, apiKey, key as WidgetKey) : null;
 
   return (
     <Page title={`${meta.emoji} ${meta.name}`} subtitle={meta.desc} backAction={{ url: "/app" }}>
@@ -177,6 +179,17 @@ export default function WidgetSettings() {
         {locked && (
           <Banner tone="warning" title="Pro plan required">
             <Button url="/app/billing">Upgrade to Pro</Button>
+          </Banner>
+        )}
+        {blockUrl && (
+          <Banner tone="warning" title="Needs a block placed in your theme">
+            <BlockStack gap="200">
+              <Text as="p">
+                Turning this on above isn&apos;t enough — {meta.name} only renders where you
+                place its block in the theme editor.
+              </Text>
+              <Button url={blockUrl} target="_blank">Place block in theme</Button>
+            </BlockStack>
           </Banner>
         )}
         {saved && !actionData && (
@@ -358,7 +371,6 @@ function TimerFields({ settings: s, disabled }: { settings: TimerSettings; disab
   const [expiredText, setExpiredText] = useField(s.expiredText);
   const [bgColor, setBgColor] = useField(s.bgColor);
   const [textColor, setTextColor] = useField(s.textColor);
-  const [anchorSelector, setAnchorSelector] = useField(s.anchorSelector);
 
   return (
     <FormLayout>
@@ -392,15 +404,6 @@ function TimerFields({ settings: s, disabled }: { settings: TimerSettings; disab
         <TextField label="Background color" name="bgColor" value={bgColor} onChange={setBgColor} autoComplete="off" disabled={disabled} />
         <TextField label="Text color" name="textColor" value={textColor} onChange={setTextColor} autoComplete="off" disabled={disabled} />
       </FormLayout.Group>
-      <TextField
-        label="Placement override (CSS selector, optional)"
-        name="anchorSelector"
-        value={anchorSelector}
-        onChange={setAnchorSelector}
-        autoComplete="off"
-        disabled={disabled}
-        helpText="From the dashboard, use “Place precisely in theme” to drag this into any section instead — that always wins. Without it, the timer auto-places right after the buy-now form; only set a selector below if that default lands in the wrong spot."
-      />
     </FormLayout>
   );
 }
@@ -413,7 +416,6 @@ function TrustFields({ settings: s, disabled }: { settings: TrustSettings; disab
   const [scrollSpeed, setScrollSpeed] = useField(String(s.scrollSpeed));
   const [iconSize, setIconSize] = useField(String(s.iconSize));
   const [color, setColor] = useField(s.color);
-  const [anchorSelector, setAnchorSelector] = useField(s.anchorSelector);
 
   const updateBadge = (i: number, patch: Partial<TrustBadge>) => {
     setBadges(badges.map((b, idx) => (idx === i ? { ...b, ...patch } : b)));
@@ -475,15 +477,6 @@ function TrustFields({ settings: s, disabled }: { settings: TrustSettings; disab
         <TextField label="Icon size (px)" name="iconSize" type="number" value={iconSize} onChange={setIconSize} autoComplete="off" disabled={disabled} />
         <TextField label="Text color" name="color" value={color} onChange={setColor} autoComplete="off" disabled={disabled} />
       </FormLayout.Group>
-      <TextField
-        label="Placement override (CSS selector, optional)"
-        name="anchorSelector"
-        value={anchorSelector}
-        onChange={setAnchorSelector}
-        autoComplete="off"
-        disabled={disabled}
-        helpText="From the dashboard, use “Place precisely in theme” to drag this into any section instead — that always wins. Without it, badges auto-place right after the buy-now form; only set a selector below if that default lands in the wrong spot."
-      />
     </FormLayout>
   );
 }

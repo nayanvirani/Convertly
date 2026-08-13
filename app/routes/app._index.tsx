@@ -14,12 +14,14 @@ import {
 import { authenticate } from "../shopify.server";
 import { getShopPlan, listWidgetSettings } from "../db.server";
 import { updateApiBaseMetafield } from "../plan.server";
-import { WIDGET_KEYS, WIDGET_META } from "../widgets";
+import { blockDeepLink, WIDGET_KEYS, WIDGET_META } from "../widgets";
 
-// One single app embed now covers every widget — settings live in this
-// dashboard (Postgres), not in per-widget theme-editor schema panels. The
-// merchant only ever needs to enable the embed once; everything else is
-// "Configure" → toggle on → done.
+// The single app embed still exists (see extensions/convertly/blocks/convertly.liquid)
+// but no longer renders anything on its own — Sticky Add to Cart and Social
+// Proof Popup are the only widgets that use it, and both auto-render once
+// enabled below with no theme-editor step. Everything else (Announcement
+// Bar, Countdown Timer, Trust Badges) requires its own block to be placed
+// in the theme editor — see blockDeepLink below.
 const EMBED_HANDLE = "convertly";
 
 function embedDeepLink(shop: string, apiKey: string): string {
@@ -27,16 +29,11 @@ function embedDeepLink(shop: string, apiKey: string): string {
   return `https://${shop}/admin/themes/current/editor?context=apps&activateAppId=${encodeURIComponent(ref)}`;
 }
 
-// Countdown Timer and Trust Badges also ship as real, merchant-placeable
-// app blocks (see extensions/convertly/blocks/) — this deep-links straight
-// into the theme editor with the block already staged on the product page's
-// main section, so placing it precisely is one click instead of hunting
-// through "Add block". Entirely optional: both widgets still render
-// automatically (heuristically placed) without this.
-function blockDeepLink(shop: string, apiKey: string, blockHandle: string): string {
-  const ref = `${apiKey}/${blockHandle}`;
-  return `https://${shop}/admin/themes/current/editor?template=product&addAppBlockId=${encodeURIComponent(ref)}&target=mainSection`;
-}
+// Announcement Bar, Countdown Timer, and Trust Badges ship as real,
+// merchant-placeable app blocks (see extensions/convertly/blocks/) —
+// REQUIRED, not optional: turning a widget on in the dashboard alone does
+// nothing for these three, the block must be dragged into the theme.
+// blockDeepLink() (in ../widgets) builds the one-click theme-editor link.
 
 // ─── Loader ───────────────────────────────────────────────────────────────────
 // Plan status is read straight from Postgres — it's kept current by the
@@ -135,7 +132,9 @@ export default function Index() {
                 Welcome to Convertly
               </div>
               <div style={{ color: "#94a3b8", fontSize: "13px" }}>
-                Step 1: enable Convertly in your theme (once). Step 2: turn on widgets below.
+                Turn on widgets below, then place their blocks in your theme editor —
+                Sticky Add to Cart &amp; Social Proof Popup need this button only; the
+                rest need their own block placed too.
               </div>
             </div>
           </div>
@@ -210,12 +209,17 @@ export default function Index() {
                         )}
                       </div>
                     </InlineStack>
+                    {allowed && isOn && meta.blockHandle && (
+                      <Text as="p" variant="bodySm" tone="caution">
+                        Needs a block placed in your theme to show up — see button below.
+                      </Text>
+                    )}
                     <Button url={allowed ? `/app/widgets/${key}` : "/app/billing"} fullWidth>
                       {allowed ? "Configure" : "Upgrade to unlock"}
                     </Button>
                     {allowed && meta.blockHandle && (
-                      <Button url={blockDeepLink(shop, apiKey, meta.blockHandle)} target="_blank" fullWidth>
-                        Place precisely in theme
+                      <Button url={blockDeepLink(shop, apiKey, key)!} target="_blank" fullWidth>
+                        Place block in theme (required)
                       </Button>
                     )}
                   </BlockStack>
@@ -256,7 +260,7 @@ export default function Index() {
                     &lt;2 min
                   </Text>
                   <Text as="p" variant="bodySm" tone="success">
-                    One theme step, ever
+                    One block per widget
                   </Text>
                 </BlockStack>
               </Card>

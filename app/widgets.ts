@@ -21,15 +21,19 @@ export const WIDGET_META: Record<
     desc: "Rotating messages with optional CTA button. Supports sticky mode.",
     emoji: "📢",
     proOnly: false,
+    // Requires the block to be placed in the theme editor — enabling here
+    // alone does nothing. blockHandle drives the dashboard's deep link.
+    blockHandle: "announcement-bar",
   },
   timer: {
     name: "Countdown Timer",
     desc: "Fixed date or evergreen mode. Drives urgency on product pages.",
     emoji: "⏱",
     proOnly: false,
-    // Auto-placed near the buy-now form by default. blockHandle lets the
-    // dashboard offer a deep link to place it precisely instead — same
-    // idea as Judge.me's placeable blocks (e.g. their "Star Ratings" block).
+    // Requires the block to be placed in the theme editor — enabling here
+    // alone does nothing. blockHandle drives the dashboard's deep link —
+    // same idea as Judge.me's placeable blocks (e.g. their "Star Ratings"
+    // block).
     blockHandle: "countdown-timer",
   },
   trust: {
@@ -41,13 +45,13 @@ export const WIDGET_META: Record<
   },
   satc: {
     name: "Sticky Add to Cart",
-    desc: "Floating bar appears when the main buy button scrolls out of view.",
+    desc: "Floating bar appears when the main buy button scrolls out of view. Renders automatically on product pages once enabled — no block placement needed.",
     emoji: "🛒",
     proOnly: true,
   },
   popup: {
     name: "Social Proof Popup",
-    desc: "Shows real products from your catalog. No fake data.",
+    desc: "Shows real products from your catalog. No fake data. Renders automatically once enabled — no block placement needed.",
     emoji: "💬",
     proOnly: true,
   },
@@ -76,11 +80,6 @@ export type TimerSettings = {
   expiredText: string;
   bgColor: string;
   textColor: string;
-  // Placed on product pages, right after this element by default (empty =
-  // built-in default: the buy-now form). Override if your theme's markup
-  // doesn't match and the timer lands in the wrong spot — same escape hatch
-  // review-widget apps like Judge.me expose for this exact problem.
-  anchorSelector: string;
 };
 
 export type TrustBadge = { text: string; icon: string };
@@ -91,8 +90,6 @@ export type TrustSettings = {
   iconSize: number;
   color: string;
   badges: TrustBadge[]; // up to 6
-  // Same placement override as the countdown timer — see its comment.
-  anchorSelector: string;
 };
 
 export type SatcSettings = {
@@ -142,7 +139,6 @@ export const WIDGET_DEFAULTS: WidgetSettingsMap = {
     expiredText: "Offer has ended",
     bgColor: "#fff3f0",
     textColor: "#c1121f",
-    anchorSelector: "",
   },
   trust: {
     layout: "horizontal",
@@ -156,7 +152,6 @@ export const WIDGET_DEFAULTS: WidgetSettingsMap = {
       { text: "Easy returns", icon: "" },
       { text: "24/7 support", icon: "" },
     ],
-    anchorSelector: "",
   },
   satc: {
     btnText: "Add to cart",
@@ -176,4 +171,27 @@ export const WIDGET_DEFAULTS: WidgetSettingsMap = {
 
 export function isWidgetKey(value: string): value is WidgetKey {
   return (WIDGET_KEYS as string[]).includes(value);
+}
+
+// Where each placeable block's deep link stages the block by default — the
+// bar makes sense on the homepage, timer/trust next to a product's buy-now
+// form. Purely a starting point; the merchant can drag it anywhere after.
+export const BLOCK_DEEP_LINK_TEMPLATE: Partial<Record<WidgetKey, string>> = {
+  bar: "index",
+  timer: "product",
+  trust: "product",
+};
+
+// Deep-links straight into the theme editor with the block already staged
+// on a sensible default section, so placing it is one click instead of
+// hunting through "Add block" — same idea as Judge.me's placeable blocks.
+// Only meaningful for widgets with a blockHandle (bar/timer/trust) — those
+// three REQUIRE this, turning the widget on in the dashboard alone does
+// nothing without the block placed.
+export function blockDeepLink(shop: string, apiKey: string, key: WidgetKey): string | null {
+  const blockHandle = WIDGET_META[key].blockHandle;
+  if (!blockHandle) return null;
+  const template = BLOCK_DEEP_LINK_TEMPLATE[key] ?? "product";
+  const ref = `${apiKey}/${blockHandle}`;
+  return `https://${shop}/admin/themes/current/editor?template=${template}&addAppBlockId=${encodeURIComponent(ref)}&target=mainSection`;
 }

@@ -1,6 +1,11 @@
 # Convertly — Shopify conversion widget suite
 
-All-in-one conversion widget suite: Announcement Bar, Countdown Timer, Trust Badges, Sticky Add-to-Cart, and Social Proof Popup. Built as a **Theme App Extension** with a **single app embed** — the merchant enables Convertly in their theme once, and every widget is then turned on/off and configured from the app's own dashboard (Postgres-backed), not from Shopify theme-editor settings panels.
+All-in-one conversion widget suite: Announcement Bar, Countdown Timer, Trust Badges, Sticky Add-to-Cart, and Social Proof Popup. Built as a **Theme App Extension**. Every widget is turned on/off and configured from the app's own dashboard (Postgres-backed), not from Shopify theme-editor settings panels — but three of the five additionally require a **placed app block** before they render at all (see below).
+
+## Placement model — two kinds of widgets
+
+- **Require a placed block** (Announcement Bar, Countdown Timer, Trust Badges): enabling the widget in the dashboard is not enough by itself — the merchant must also drag the widget's app block into the theme editor (`blocks/announcement-bar.liquid`, `blocks/countdown-timer.liquid`, `blocks/trust-badges.liquid` — all `target: "section"`). No block placed = nothing renders, on purpose. Same idea as Judge.me's placeable blocks (e.g. their "Star Ratings" block) — exact placement is an explicit merchant choice, never guessed at. The dashboard's "Place block in theme" button deep-links straight into the theme editor with the block staged on a sensible default section.
+- **Auto-render once enabled** (Sticky Add to Cart, Social Proof Popup): no block, no theme-editor step — these render themselves via the single app embed (`blocks/convertly.liquid`, `target: "body"`) the moment they're toggled on. There's nowhere more "placed" a floating sticky bar or corner popup could be anyway.
 
 ## What's inside
 
@@ -8,16 +13,19 @@ All-in-one conversion widget suite: Announcement Bar, Countdown Timer, Trust Bad
 extensions/convertly/
 ├── shopify.extension.toml
 ├── blocks/
-│   └── convertly.liquid           the one app embed — injects config + convertly.js
+│   ├── convertly.liquid           the app embed — injects config + convertly.js (SATC/popup only)
+│   ├── announcement-bar.liquid    placeable block, required for the bar to render
+│   ├── countdown-timer.liquid     placeable block, required for the timer to render
+│   └── trust-badges.liquid        placeable block, required for badges to render
 └── assets/
     ├── cb-core.css                shared styles, all classes prefixed cb-
     └── convertly.js                fetches /api/widgets-config and renders whichever
                                     widgets are enabled, entirely client-side
 ```
 
-`convertly.js` fetches per-shop widget config (`app/routes/api.widgets-config.tsx`) from this app's own backend and renders each enabled widget's DOM/behavior itself — there's no per-widget Liquid schema anymore. Merchants configure everything (text, colors, which collection, on/off) from **Convertly → Dashboard → Configure** inside the embedded app (`app/routes/app.widgets.$key.tsx`), backed by the `widget_settings` table in Postgres. See `app/widgets.ts` for the full settings shape per widget.
+`convertly.js` fetches per-shop widget config (`app/routes/api.widgets-config.tsx`) from this app's own backend and renders each enabled widget's DOM/behavior itself — there's no per-widget Liquid schema. Merchants configure everything (text, colors, which collection, on/off) from **Convertly → Dashboard → Configure** inside the embedded app (`app/routes/app.widgets.$key.tsx`), backed by the `widget_settings` table in Postgres. See `app/widgets.ts` for the full settings shape per widget, and `blockDeepLink()`/`WIDGET_META[key].blockHandle` there for which widgets require a block and where their deep link stages it.
 
-Countdown Timer and Trust Badges also ship as real, merchant-placeable app blocks (`blocks/countdown-timer.liquid`, `blocks/trust-badges.liquid` — target: `"section"`), same idea as Judge.me's placeable blocks (e.g. their "Star Ratings" block): drag one into any section for exact control over where it renders. `convertly.js` looks for a placed block's mount point first; if the merchant never adds one, it falls back to a JS heuristic (next to the buy-now form on product pages), with an optional CSS-selector override per widget if that default doesn't match a theme's markup. Either way settings live in the Convertly dashboard, not in a Liquid `{% schema %}`.
+For the bar/timer/trust blocks, `convertly.js` looks for the block's `[data-convertly-widget]` mount point and renders into it — if that mount point isn't on the page (block never placed), the widget renders nothing at all. There is no auto-placement fallback.
 
 ## Feature notes
 
@@ -36,7 +44,7 @@ Countdown Timer and Trust Badges also ship as real, merchant-placeable app block
    # copy the extensions/convertly folder from this project into your app's extensions/
    shopify app dev             # opens a tunnel + installs on your dev store
    ```
-3. In the dev store: **Online Store → Themes → Customize → App embeds** — toggle on **Convertly** (once — this covers every widget). Then, in the embedded app dashboard, open each widget's **Configure** page to turn it on and set its text/colors/etc.
+3. In the dev store: **Online Store → Themes → Customize → App embeds** — toggle on **Convertly** (needed for Sticky Add to Cart / Social Proof Popup). Then, in the embedded app dashboard, open each widget's **Configure** page to turn it on and set its text/colors/etc. — and for Announcement Bar, Countdown Timer, and Trust Badges, use the **Place block in theme** button (or add the block manually from **Add block → Apps**) or nothing will show up.
 
 ## Before submitting to the App Store
 

@@ -1,0 +1,29 @@
+{%- comment -%}
+  Placement block for the Announcement Bar widget. Add this once, anywhere
+  in the header or footer section group — its own position in the page
+  doesn't matter since the bar always renders fixed/sticky at the very
+  top/bottom of the page via CSS. Its presence is just the "merchant wants
+  this" signal. Settings still live in the Convertly admin dashboard, not
+  here.
+
+  Required: turning the bar on in the dashboard alone does nothing — this
+  block must be placed somewhere in the theme editor for it to render at all.
+{%- endcomment -%}
+
+{{ 'cb-core.css' | asset_url | stylesheet_tag }}
+
+<div
+  data-convertly-config
+  hidden
+  data-shop="{{ shop.permanent_domain }}"
+  data-api="{{ app.metafields.convertly.api_base }}"
+></div>
+<div data-convertly-widget="bar" data-block-id="{{ block.id }}" hidden></div>
+<script src="{{ 'convertly.js' | asset_url }}" defer></script>
+
+{% schema %}
+{
+  "name": "Announcement Bar",
+  "target": "section"
+}
+{% endschema %}

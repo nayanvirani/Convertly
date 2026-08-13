@@ -38,18 +38,6 @@
     return /\/products\//.test(window.location.pathname);
   }
 
-  // Default anchor for widgets that need a spot within the page's content
-  // flow (timer, trust). Merchants can override via anchorSelector if a
-  // theme's markup doesn't match this guess — same escape hatch review-
-  // widget apps expose for the same reason.
-  function findAnchor(selector) {
-    if (selector) {
-      var el = document.querySelector(selector);
-      if (el) return el;
-    }
-    return document.querySelector('form[action*="/cart/add"]');
-  }
-
   function money(cents) {
     var currency = (window.Shopify && window.Shopify.currency && window.Shopify.currency.active) || 'USD';
     try {
@@ -60,7 +48,14 @@
   }
 
   // ─── Announcement bar ─────────────────────────────────────────────────────
+  // Every widget requires its block to be explicitly placed somewhere
+  // (Header/footer section group for sitewide widgets like this one) —
+  // enabling it in the dashboard alone is not enough. The block's own DOM
+  // position doesn't matter for the bar specifically (it always renders at
+  // the very top/bottom of <body> via fixed/sticky CSS) — its presence is
+  // just the "merchant actually wants this" signal.
   function renderBar(s) {
+    if (!document.querySelector('[data-convertly-widget="bar"]')) return;
     var messages = (s.messages || []).filter(Boolean);
     if (!messages.length) return;
     var key = 'cb-bar-dismissed';
@@ -197,29 +192,15 @@
   }
 
   function renderTimer(s) {
-    // A merchant-placed block wins outright, on whatever page it was put on
-    // (homepage sale countdown, a collection page, anywhere) — placement is
-    // an explicit choice and should never be second-guessed.
+    // Requires an explicitly placed block — no auto-placement fallback.
     var mounts = document.querySelectorAll('[data-convertly-widget="timer"]');
-    if (mounts.length) {
-      mounts.forEach(function (mount) {
-        var el = buildTimerElement(s);
-        mount.appendChild(el);
-        startTimer(el, s);
-      });
-      track('timer', 'view');
-      return;
-    }
-
-    // No block placed — fall back to the auto-placement heuristic, which
-    // only makes sense on product pages since it anchors to the buy-now form.
-    if (!isProductPage()) return;
-    var anchor = findAnchor(s.anchorSelector);
-    if (!anchor) return;
-    var el = buildTimerElement(s);
-    anchor.insertAdjacentElement('afterend', el);
+    if (!mounts.length) return;
+    mounts.forEach(function (mount) {
+      var el = buildTimerElement(s);
+      mount.appendChild(el);
+      startTimer(el, s);
+    });
     track('timer', 'view');
-    startTimer(el, s);
   }
 
   // ─── Trust badges ─────────────────────────────────────────────────────────
@@ -300,25 +281,21 @@
   }
 
   function renderTrust(s) {
+    // Requires an explicitly placed block — no auto-placement fallback.
     var badges = (s.badges || []).filter(function (b) { return b && b.text; });
     if (!badges.length) return;
 
     var mounts = document.querySelectorAll('[data-convertly-widget="trust"]');
-    if (mounts.length) {
-      mounts.forEach(function (mount) {
-        mount.appendChild(buildTrustElement(s, badges));
-      });
-      track('trust', 'view');
-      return;
-    }
-
-    var anchor = findAnchor(s.anchorSelector) || document.querySelector('main');
-    if (!anchor) return;
-    anchor.insertAdjacentElement('afterend', buildTrustElement(s, badges));
+    if (!mounts.length) return;
+    mounts.forEach(function (mount) {
+      mount.appendChild(buildTrustElement(s, badges));
+    });
     track('trust', 'view');
   }
 
   // ─── Sticky add to cart ───────────────────────────────────────────────────
+  // Auto-renders on product pages once enabled — no block placement needed
+  // (there's nowhere more "placed" a sticky bottom bar could be anyway).
   function renderSatc(s) {
     if (!isProductPage()) return;
     var mainForm = document.querySelector('form[action*="/cart/add"]');
@@ -437,6 +414,8 @@
   }
 
   // ─── Social proof popup ───────────────────────────────────────────────────
+  // Auto-renders sitewide once enabled — no block placement needed (it's a
+  // floating corner popup, not something that lives in a section).
   function renderPopup(s) {
     var dismissedKey = 'cb-pop-dismissed';
     try { if (sessionStorage.getItem(dismissedKey)) return; } catch (e) {}
