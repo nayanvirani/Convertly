@@ -10,7 +10,7 @@
 // No auth token needed — this is aggregate, non-PII analytics data.
 
 import type { ActionFunctionArgs } from "@remix-run/node";
-import { getShopPlan, trackWidgetEvent } from "../db.server";
+import { isShopInstalled, trackWidgetEvent } from "../db.server";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -51,9 +51,11 @@ export async function action({ request }: ActionFunctionArgs) {
     }
 
     // Only record events for shops that have our app installed.
-    // This prevents random POST spam from unknown shops.
-    const plan = await getShopPlan(shop);
-    if (!plan) {
+    // This prevents random POST spam from unknown shops. Checked against
+    // shopify_sessions (populated at install, regardless of billing status)
+    // — not shop_plans, which stays empty until a billing event happens and
+    // would wrongly reject every freshly-installed, pre-billing shop.
+    if (!(await isShopInstalled(shop))) {
       return new Response(JSON.stringify({ ok: false, error: "shop not found" }), {
         status: 403,
         headers: { ...CORS, "Content-Type": "application/json" },

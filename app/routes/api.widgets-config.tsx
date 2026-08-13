@@ -11,7 +11,7 @@
 // returned, so a short public cache is fine.
 
 import type { LoaderFunctionArgs } from "@remix-run/node";
-import { getShopPlan, listWidgetSettings } from "../db.server";
+import { getShopPlan, isShopInstalled, listWidgetSettings } from "../db.server";
 import { WIDGET_META, WIDGET_KEYS } from "../widgets";
 
 const CORS = {
@@ -37,15 +37,17 @@ export async function loader({ request }: LoaderFunctionArgs) {
     });
   }
 
-  const plan = await getShopPlan(shop);
-  if (!plan) {
+  if (!(await isShopInstalled(shop))) {
     // Not an installed shop — don't leak any config.
     return new Response(JSON.stringify({ error: "shop not found" }), {
       status: 403,
       headers: { ...CORS, "Content-Type": "application/json" },
     });
   }
-  const isPro = plan === "pro";
+  // No shop_plans row yet (e.g. fresh install, never touched billing) just
+  // means Free, not "unknown" — getShopPlan already returns null in that
+  // case and `=== "pro"` naturally treats null as not-Pro.
+  const isPro = (await getShopPlan(shop)) === "pro";
 
   const all = await listWidgetSettings(shop);
   const widgets: Record<string, unknown> = {};

@@ -82,6 +82,28 @@ export function ready(): Promise<void> {
   return _ready;
 }
 
+/**
+ * Whether this shop currently has the app installed — checked against the
+ * "shopify_sessions" table (populated at OAuth time, for every install,
+ * regardless of billing status), NOT shop_plans. shop_plans only gets a row
+ * once a subscription event happens (webhook) or the merchant visits the
+ * billing page — a shop that just installed and hasn't touched billing yet
+ * would incorrectly look "not installed" if we checked shop_plans instead.
+ */
+export async function isShopInstalled(shop: string): Promise<boolean> {
+  await ready();
+  try {
+    const { rows } = await pool().query(
+      `SELECT 1 FROM "shopify_sessions" WHERE "shop" = $1 LIMIT 1`,
+      [shop]
+    );
+    return rows.length > 0;
+  } catch (err) {
+    console.error("[db] isShopInstalled error:", err);
+    return false;
+  }
+}
+
 /** Return the stored plan handle for a shop, or null if unknown. */
 export async function getShopPlan(shop: string): Promise<string | null> {
   await ready();
