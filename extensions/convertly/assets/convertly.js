@@ -321,7 +321,11 @@
     var containerWidth = wrapEl.getBoundingClientRect().width;
     if (!singleWidth || !containerWidth) return;
 
-    var copiesNeeded = Math.min(20, Math.max(2, Math.ceil((containerWidth * 2) / singleWidth)));
+    // +1 beyond the exact math as a safety margin — subpixel rounding and
+    // measuring mid-layout (see the re-runs in renderTrust below) can
+    // otherwise leave the count just barely short. Extra copies past what
+    // overflow:hidden ever reveals cost nothing visually.
+    var copiesNeeded = Math.min(20, Math.max(2, Math.ceil((containerWidth * 2) / singleWidth) + 1));
     var have = trackEl.children.length;
     for (var i = have; i < copiesNeeded; i++) {
       var clone = first.cloneNode(true);
@@ -342,11 +346,33 @@
 
     var mounts = document.querySelectorAll('[data-convertly-widget="trust"]');
     if (!mounts.length) return;
+
+    var built = [];
     mounts.forEach(function (mount) {
       var el = buildTrustElement(s, badges);
       mount.appendChild(el);
-      fillMarqueeTrack(el);
+      built.push(el);
     });
+
+    function fillAll() { built.forEach(fillMarqueeTrack); }
+    fillAll();
+
+    // The first measurement can land before the theme's webfont has
+    // swapped in or before other page content finishes shifting layout —
+    // either can silently make the initial width measurement too narrow,
+    // under-filling the track. fillMarqueeTrack() only ever adds copies
+    // (never removes), so re-running it later is always safe and just
+    // tops up whatever's missing once real measurements are available.
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(fillAll).catch(function () {});
+    }
+    window.addEventListener('load', fillAll, { once: true });
+    var resizeTimer;
+    window.addEventListener('resize', function () {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(fillAll, 200);
+    });
+
     track('trust', 'view');
   }
 
