@@ -20,7 +20,14 @@ import {
   type MigrationResult,
 } from "./app/admin.server";
 import { pool } from "./app/db.server";
-import { listAdminUsers, upsertAdminUser, deleteAdminUser } from "./app/adminAuth.server";
+import {
+  listAdminUsers,
+  upsertAdminUser,
+  deleteAdminUser,
+  verifyAdminCredentials,
+  createSessionToken,
+  SESSION_MAX_AGE_SEC,
+} from "./app/adminAuth.server";
 
 function esc(value: unknown): string {
   return String(value ?? "").replace(/[&<>"']/g, (c) =>
@@ -132,12 +139,58 @@ function layout(opts: { title: string; badge: string; adminPath: string; body: s
     <a href="${esc(opts.adminPath)}">Dashboard</a>
     <a href="${esc(opts.adminPath)}/users">Admin users</a>
     <a class="export" href="${esc(opts.adminPath)}/export">↓ Export CSV</a>
-    <form class="inline" method="post" action="${esc(opts.adminPath)}-logout">
+    <form class="inline" method="post" action="${esc(opts.adminPath)}/logout">
       <button type="submit">Sign out</button>
     </form>
   </div>
 </header>
 <main>${opts.body}</main>
+</body>
+</html>`;
+}
+
+function loginLayout(body: string): string {
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex, nofollow" />
+<title>Sign in — Convertly</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; background: #0F1C3F;
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    display: flex; align-items: center; justify-content: center; padding: 24px;
+  }
+  .card {
+    background: #fff; border-radius: 14px; padding: 36px 32px; width: 100%; max-width: 360px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.35);
+  }
+  .brand { font-size: 17px; font-weight: 800; color: #18150F; margin-bottom: 4px; }
+  .sub { font-size: 13px; color: #7B7367; margin-bottom: 24px; }
+  label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; color: #18150F; }
+  input {
+    width: 100%; border: 1px solid #E3DDD5; border-radius: 8px; padding: 10px 12px;
+    font-size: 14px; font-family: inherit; margin-bottom: 16px;
+  }
+  button {
+    width: 100%; background: #1B8FEA; color: #fff; border: none; border-radius: 8px;
+    padding: 11px; font-size: 14px; font-weight: 700; cursor: pointer;
+  }
+  .err {
+    background: #FEE2E2; color: #B91C1C; border: 1px solid #FECACA; border-radius: 8px;
+    padding: 10px 12px; font-size: 13px; margin-bottom: 16px;
+  }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="brand">Convertly</div>
+    <div class="sub">Admin sign in</div>
+    ${body}
+  </div>
 </body>
 </html>`;
 }
@@ -378,4 +431,49 @@ export async function handleUsersAction(req: Request, res: Response, adminPath: 
   }
   const body = await renderUsersBody(adminPath, me, message);
   res.status(200).type("html").send(layout({ title: "Admin Users", badge: "Admin Users", adminPath, body: `<div class="narrow" style="margin:0 auto;">${body}</div>` }));
+}
+
+// ─── Login / logout ─────────────────────────────────────────────────────────
+// A real login screen instead of the browser's native HTTP Basic Auth popup.
+// Sessions are a signed cookie (see createSessionToken/verifySessionToken in
+// adminAuth.server.ts) — no server-side session table.
+
+function sessionCookie(adminPath: string, token: string | null): string {
+  const secure = process.env.NODE_ENV === "production" ? "; Secure" : "";
+  if (token === null) {
+    return `admin_session=; HttpOnly${secure}; SameSite=Lax; Path=${adminPath}; Max-Age=0`;
+  }
+  return `admin_session=${token}; HttpOnly${secure}; SameSite=Lax; Path=${adminPath}; Max-Age=${SESSION_MAX_AGE_SEC}`;
+}
+
+export function renderLogin(_req: Request, res: Response, adminPath: string, error?: string) {
+  const body = `
+    ${error ? `<div class="err">${esc(error)}</div>` : ""}
+    <form method="post" action="${esc(adminPath)}/login">
+      <label for="username">Username</label>
+      <input id="username" type="text" name="username" autocomplete="username" required autofocus />
+      <label for="password">Password</label>
+      <input id="password" type="password" name="password" autocomplete="current-password" required />
+      <button type="submit">Sign in</button>
+    </form>
+  `;
+  res.status(error ? 401 : 200).type("html").send(loginLayout(body));
+}
+
+export async function handleLogin(req: Request, res: Response, adminPath: string) {
+  const username = String(req.body?.username ?? "");
+  const password = String(req.body?.password ?? "");
+  const ok = await verifyAdminCredentials(username, password);
+  if (!ok) {
+    renderLogin(req, res, adminPath, "Incorrect username or password.");
+    return;
+  }
+  const token = createSessionToken(username.trim().toLowerCase());
+  res.setHeader("Set-Cookie", sessionCookie(adminPath, token));
+  res.redirect(adminPath);
+}
+
+export function handleLogout(_req: Request, res: Response, adminPath: string) {
+  res.setHeader("Set-Cookie", sessionCookie(adminPath, null));
+  res.redirect(`${adminPath}/login`);
 }

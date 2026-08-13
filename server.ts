@@ -1,7 +1,7 @@
 import { createRequestHandler } from "@remix-run/express";
 import { installGlobals, type ServerBuild } from "@remix-run/node";
 import express from "express";
-import { verifyAdminCredentials } from "./app/adminAuth.server";
+import { verifySessionToken } from "./app/adminAuth.server";
 import {
   renderDashboard,
   handleDashboardAction,
@@ -9,7 +9,22 @@ import {
   renderDebug,
   renderUsers,
   handleUsersAction,
+  renderLogin,
+  handleLogin,
+  handleLogout,
 } from "./adminPanel.server";
+
+function parseCookies(header: string | undefined): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (!header) return out;
+  for (const pair of header.split(";")) {
+    const idx = pair.indexOf("=");
+    if (idx === -1) continue;
+    const key = pair.slice(0, idx).trim();
+    if (key) out[key] = decodeURIComponent(pair.slice(idx + 1).trim());
+  }
+  return out;
+}
 
 installGlobals({ nativeFetch: true });
 
@@ -34,34 +49,27 @@ if (ADMIN_PATH) {
   const adminRouter = express.Router();
   adminRouter.use(express.urlencoded({ extended: true }));
 
-  // Each admin has their own username + password, checked against the
-  // admin_users table (see adminAuth.server.ts) — manage accounts from the
-  // panel itself, or bootstrap the first one with `npm run admin:create-user`.
+  // A real login screen instead of the browser's native HTTP Basic Auth
+  // popup. These three routes are reachable without a session; everything
+  // else below the auth-gate middleware requires a valid one.
+  adminRouter.get("/login", (req, res) => renderLogin(req, res, ADMIN_PATH));
+  adminRouter.post("/login", (req, res) => handleLogin(req, res, ADMIN_PATH));
+  adminRouter.post("/logout", (req, res) => handleLogout(req, res, ADMIN_PATH));
+
+  // Each admin has their own username + password, checked at login against
+  // the admin_users table (see adminAuth.server.ts) — manage accounts from
+  // the panel itself, or bootstrap the first one with
+  // `npm run admin:create-user`. The session cookie is a signed, stateless
+  // token (12h) — no session table needed.
   adminRouter.use((req, res, next) => {
-    const auth = req.headers.authorization;
-    if (auth && auth.startsWith("Basic ")) {
-      const decoded = Buffer.from(auth.slice(6), "base64").toString("utf8");
-      const colon = decoded.indexOf(":");
-      const username = colon >= 0 ? decoded.slice(0, colon) : decoded;
-      const password = colon >= 0 ? decoded.slice(colon + 1) : "";
-      verifyAdminCredentials(username, password)
-        .then((ok) => {
-          if (!ok) {
-            res.set("WWW-Authenticate", 'Basic realm="Convertly Admin"');
-            res.status(401).send("Authentication required.");
-            return;
-          }
-          (req as any).adminUsername = username.trim().toLowerCase();
-          next();
-        })
-        .catch((err) => {
-          console.error("[admin] auth check failed:", err);
-          res.status(500).send("Auth check failed.");
-        });
+    const cookies = parseCookies(req.headers.cookie);
+    const username = verifySessionToken(cookies["admin_session"]);
+    if (!username) {
+      res.redirect(`${ADMIN_PATH}/login`);
       return;
     }
-    res.set("WWW-Authenticate", 'Basic realm="Convertly Admin"');
-    res.status(401).send("Authentication required.");
+    (req as any).adminUsername = username;
+    next();
   });
 
   adminRouter.get("/", (req, res) => renderDashboard(req, res, ADMIN_PATH));
@@ -76,13 +84,6 @@ if (ADMIN_PATH) {
   );
 
   app.use(ADMIN_PATH, adminRouter);
-
-  // Sign-out: POSTs here always return 401 to clear the browser's cached
-  // Basic Auth credentials.
-  app.post(`${ADMIN_PATH}-logout`, (_req, res) => {
-    res.set("WWW-Authenticate", 'Basic realm="Convertly Admin"');
-    res.status(401).send("Logged out.");
-  });
 } else {
   console.warn("[admin] ADMIN_PATH is not set — hidden admin dashboard is disabled.");
 }
