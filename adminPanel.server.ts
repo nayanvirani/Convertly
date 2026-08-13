@@ -205,9 +205,9 @@ function formatExpires(ts: string | number | null): string {
   });
 }
 
+// Plan always comes from our DB (webhook-driven) now, never a live API
+// call, so it's always confidently Pro/Free/Trial — no "API Error" state.
 function planBadge(shop: EnrichedShop): string {
-  if (!shop.accessToken) return `<span class="badge-pill badge-gray">No Token</span>`;
-  if (shop.apiError) return `<span class="badge-pill badge-gray">API Error</span>`;
   if (shop.isPro && shop.trialActive) return `<span class="badge-pill badge-purple">Trial</span>`;
   if (shop.isPro) return `<span class="badge-pill badge-purple">Pro</span>`;
   return `<span class="badge-pill badge-orange">Free</span>`;

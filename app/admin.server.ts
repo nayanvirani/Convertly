@@ -1,4 +1,4 @@
-import { pool } from "./db.server";
+import { pool, getShopPlan } from "./db.server";
 
 export type ShopRow = {
   id: string;
@@ -18,7 +18,12 @@ export type EnrichedShop = ShopRow & {
   isPro: boolean;
   planName: string;
   trialActive: boolean;
-  apiError: boolean;
+  // Whether the live store-details call (name/owner/email) failed — this no
+  // longer has anything to do with Plan. Plan comes from our own database
+  // (shop_plans, kept current by the APP_SUBSCRIPTIONS_UPDATE webhook), so
+  // it's always known and never shows "API Error" just because a live
+  // Admin API call happened to fail or the token was mid-refresh.
+  storeInfoError: boolean;
 };
 
 export async function getShops(): Promise<ShopRow[]> {
@@ -230,10 +235,16 @@ async function fetchShopInfo(
   }
 }
 
-async function fetchBillingStatus(
+// Best-effort bonus enrichment ONLY — a nicer plan name (e.g. the real
+// subscription name instead of just "Pro") and trial-vs-paid distinction,
+// when the live call happens to succeed. Never the source of truth for
+// isPro: that's always getShopPlan() (our DB, kept current by the
+// APP_SUBSCRIPTIONS_UPDATE webhook), so a failed/slow/mid-refresh API call
+// here never produces "API Error" or a wrong Free/Pro status.
+async function fetchBillingDetails(
   shop: string,
   accessToken: string
-): Promise<{ isPro: boolean; planName: string; trialActive: boolean } | null> {
+): Promise<{ planName: string; trialActive: boolean } | null> {
   try {
     const query = `{ currentAppInstallation { activeSubscriptions { name status trialDays } } }`;
     const res = await withTimeout(
@@ -251,10 +262,10 @@ async function fetchBillingStatus(
     const data: any = await res.json();
     const subs: any[] = data.data?.currentAppInstallation?.activeSubscriptions ?? [];
     const active = subs[0];
+    if (!active) return null;
     return {
-      isPro: subs.length > 0,
-      planName: active?.name ?? "Free",
-      trialActive: active?.status === "ACTIVE" && (active?.trialDays ?? 0) > 0,
+      planName: active.name ?? "Pro",
+      trialActive: active.status === "ACTIVE" && (active.trialDays ?? 0) > 0,
     };
   } catch {
     return null;
@@ -266,16 +277,22 @@ export async function getEnrichedShops(): Promise<EnrichedShop[]> {
 
   return Promise.all(
     shops.map(async (shop) => {
+      // Source of truth for Plan, always — our DB, kept current by the
+      // APP_SUBSCRIPTIONS_UPDATE webhook. Never a live API call, so it's
+      // never affected by an expired/mid-refresh token or a flaky request.
+      const dbPlan = await getShopPlan(shop.shop);
+      const isPro = dbPlan === "pro";
+
       if (!shop.accessToken) {
         return {
           ...shop,
           storeName: null,
           ownerName: null,
           ownerEmail: null,
-          isPro: false,
-          planName: "Free",
+          isPro,
+          planName: isPro ? "Pro" : "Free",
           trialActive: false,
-          apiError: false,
+          storeInfoError: false,
         };
       }
 
@@ -294,9 +311,11 @@ export async function getEnrichedShops(): Promise<EnrichedShop[]> {
         }
       }
 
-      const [info, billing] = await Promise.all([
+      // Live calls now only enrich display (store/owner name, trial badge)
+      // — their failure never affects Plan or produces "API Error" there.
+      const [info, billingDetails] = await Promise.all([
         fetchShopInfo(shop.shop, accessToken),
-        fetchBillingStatus(shop.shop, accessToken),
+        fetchBillingDetails(shop.shop, accessToken),
       ]);
 
       return {
@@ -304,10 +323,10 @@ export async function getEnrichedShops(): Promise<EnrichedShop[]> {
         storeName: info?.storeName ?? null,
         ownerName: info?.ownerName ?? null,
         ownerEmail: info?.ownerEmail ?? null,
-        isPro: billing?.isPro ?? false,
-        planName: billing?.planName ?? "Free",
-        trialActive: billing?.trialActive ?? false,
-        apiError: info === null && billing === null,
+        isPro,
+        planName: billingDetails?.planName ?? (isPro ? "Pro" : "Free"),
+        trialActive: isPro && (billingDetails?.trialActive ?? false),
+        storeInfoError: info === null,
       };
     })
   );
