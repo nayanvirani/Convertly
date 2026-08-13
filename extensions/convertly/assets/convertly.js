@@ -220,12 +220,17 @@
       css += '#' + bid + ' .cb-trust { flex-direction: column; align-items: flex-start; }';
     } else if (s.layout === 'scroll') {
       css += '#' + bid + ' { overflow: hidden; } #' + bid + ' .cb-trust-track { display:flex; width:max-content; animation: cbmarquee ' + s.scrollSpeed + 's linear infinite; } #' + bid + ' .cb-trust { flex-wrap: nowrap; } #' + bid + ' .cb-trust-track:hover { animation-play-state: paused; }';
-    } else if (needsScroll) {
-      // Desktop itself isn't scroll mode, but the DOM still has the
-      // duplicate list (built below) because *mobile* needs it for its
-      // marquee loop. Hide that duplicate by default so it doesn't just
-      // show up as a second, un-animated row on desktop — the mobile-only
-      // media query below un-hides it again where it's actually needed.
+    }
+    if (needsScroll && s.layout !== 'scroll') {
+      // Desktop layout itself isn't scroll mode (it's 'horizontal',
+      // 'vertical', whatever) but the DOM still has the duplicate list
+      // (built below) because *mobile* needs it for its marquee loop.
+      // Hide that duplicate by default, independent of which desktop
+      // layout is active, so it doesn't show up as a second, un-animated
+      // row/column on desktop — the mobile-only media query below
+      // un-hides it again where it's actually needed. This has to be a
+      // standalone check, not chained onto the 'vertical' branch above,
+      // or the vertical desktop layout would skip it and keep the bug.
       css += '#' + bid + ' .cb-trust--dupe { display: none; }';
     }
     css += '@keyframes cbmarquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }';
