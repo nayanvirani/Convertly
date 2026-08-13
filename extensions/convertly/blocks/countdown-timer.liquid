@@ -1,0 +1,28 @@
+{%- comment -%}
+  Optional precise-placement block for the Countdown Timer widget. Drag this
+  into any section (e.g. right under the price on a product page) for exact
+  control over where it renders — same idea as Judge.me's "Star Ratings"
+  block. Settings still live in the Convertly admin dashboard, not here.
+
+  If a merchant never adds this block, the timer still renders automatically
+  (via convertly.js, placed next to the buy-now form) as long as it's turned
+  on in the dashboard — this block only overrides *where*, never *whether*.
+{%- endcomment -%}
+
+{{ 'cb-core.css' | asset_url | stylesheet_tag }}
+
+<div
+  data-convertly-config
+  hidden
+  data-shop="{{ shop.permanent_domain }}"
+  data-api="{{ app.metafields.convertly.api_base }}"
+></div>
+<div data-convertly-widget="timer" data-block-id="{{ block.id }}"></div>
+<script src="{{ 'convertly.js' | asset_url }}" defer></script>
+
+{% schema %}
+{
+  "name": "Countdown Timer",
+  "target": "section"
+}
+{% endschema %}

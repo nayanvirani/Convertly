@@ -1,0 +1,29 @@
+{%- comment -%}
+  Optional precise-placement block for the Trust Badges widget. Drag this
+  into any section for exact control over where it renders — same idea as
+  Judge.me's "Trust Badge" block. Settings still live in the Convertly admin
+  dashboard, not here.
+
+  If a merchant never adds this block, the badges still render automatically
+  (via convertly.js, placed next to the buy-now form) as long as they're
+  turned on in the dashboard — this block only overrides *where*, never
+  *whether*.
+{%- endcomment -%}
+
+{{ 'cb-core.css' | asset_url | stylesheet_tag }}
+
+<div
+  data-convertly-config
+  hidden
+  data-shop="{{ shop.permanent_domain }}"
+  data-api="{{ app.metafields.convertly.api_base }}"
+></div>
+<div data-convertly-widget="trust" data-block-id="{{ block.id }}"></div>
+<script src="{{ 'convertly.js' | asset_url }}" defer></script>
+
+{% schema %}
+{
+  "name": "Trust Badges",
+  "target": "section"
+}
+{% endschema %}

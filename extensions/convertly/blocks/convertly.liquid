@@ -10,7 +10,7 @@
 {{ 'cb-core.css' | asset_url | stylesheet_tag }}
 
 <div
-  id="convertly-config"
+  data-convertly-config
   hidden
   data-shop="{{ shop.permanent_domain }}"
   data-api="{{ app.metafields.convertly.api_base }}"

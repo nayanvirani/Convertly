@@ -26,6 +26,17 @@ function embedDeepLink(shop: string, apiKey: string): string {
   return `https://${shop}/admin/themes/current/editor?context=apps&activateAppId=${encodeURIComponent(ref)}`;
 }
 
+// Countdown Timer and Trust Badges also ship as real, merchant-placeable
+// app blocks (see extensions/convertly/blocks/) — this deep-links straight
+// into the theme editor with the block already staged on the product page's
+// main section, so placing it precisely is one click instead of hunting
+// through "Add block". Entirely optional: both widgets still render
+// automatically (heuristically placed) without this.
+function blockDeepLink(shop: string, apiKey: string, blockHandle: string): string {
+  const ref = `${apiKey}/${blockHandle}`;
+  return `https://${shop}/admin/themes/current/editor?template=product&addAppBlockId=${encodeURIComponent(ref)}&target=mainSection`;
+}
+
 // ─── Loader ───────────────────────────────────────────────────────────────────
 // Plan status is read straight from Postgres — it's kept current by the
 // APP_SUBSCRIPTIONS_UPDATE webhook (see app/routes/webhooks.tsx) and by the
@@ -187,6 +198,11 @@ export default function Index() {
                     <Button url={allowed ? `/app/widgets/${key}` : "/app/billing"} fullWidth>
                       {allowed ? "Configure" : "Upgrade to unlock"}
                     </Button>
+                    {allowed && meta.blockHandle && (
+                      <Button url={blockDeepLink(shop, apiKey, meta.blockHandle)} target="_blank" fullWidth>
+                        Place precisely in theme
+                      </Button>
+                    )}
                   </BlockStack>
                 </Card>
               );

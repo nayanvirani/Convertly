@@ -1,11 +1,23 @@
-/* Convertly — single embed, JSON-driven widget renderer.
+/* Convertly — JSON-driven widget renderer.
  * Fetches /api/widgets-config for this shop and renders whichever widgets
  * are enabled. Uses the shop's public storefront JSON endpoints
  * (/products/*.js, /collections/*.json) for live product data — no admin
  * API calls happen from the browser.
+ *
+ * This same script is included by the main app embed AND by the optional
+ * Countdown Timer / Trust Badges app blocks (for precise placement — drag
+ * the block into a section, same idea as Judge.me's placeable blocks). All
+ * three can be present on the same page at once, so:
+ *  - config is read from whichever [data-convertly-config] element exists
+ *    (each of the three Liquid files renders one; they're all identical)
+ *  - a one-time init guard stops the fetch+render logic from running more
+ *    than once even though the <script> tag may appear 2-3 times on a page
  */
 (function () {
-  var cfg = document.getElementById('convertly-config');
+  if (window.__convertlyInit) return;
+  window.__convertlyInit = true;
+
+  var cfg = document.querySelector('[data-convertly-config]');
   if (!cfg) return;
   var shop = cfg.getAttribute('data-shop');
   var api = cfg.getAttribute('data-api');
@@ -113,16 +125,16 @@
   }
 
   // ─── Countdown timer ──────────────────────────────────────────────────────
+  // Renders into a merchant-placed [data-convertly-widget="timer"] block if
+  // one exists (precise placement, dragged in via the theme editor — same
+  // idea as Judge.me's placeable blocks); otherwise falls back to the
+  // heuristic anchor placement so the widget still works with zero
+  // theme-editor steps beyond enabling the app embed.
   function pad(n) { return n < 10 ? '0' + n : '' + n; }
 
-  function renderTimer(s) {
-    if (!isProductPage()) return;
-    var anchor = findAnchor(s.anchorSelector);
-    if (!anchor) return;
-
+  function buildTimerElement(s) {
     var el = document.createElement('div');
     el.className = 'cb-count';
-    el.id = 'cb-count';
     el.setAttribute('role', 'timer');
     el.style.background = s.bgColor;
     el.style.color = s.textColor;
@@ -135,8 +147,10 @@
       '<span class="cb-count__unit"><span class="cb-count__num" data-u="s">--</span><span class="cb-count__word">Sec</span></span>' +
       '</span>';
     el.querySelector('.cb-count__label').textContent = s.label || '';
-    anchor.insertAdjacentElement('afterend', el);
+    return el;
+  }
 
+  function startTimer(el, s) {
     var endMs;
     if (s.mode === 'evergreen') {
       var minutes = s.evergreenMinutes || 30;
@@ -152,8 +166,6 @@
       var parsed = new Date(s.endDate + 'T' + (s.endTime || '23:59'));
       endMs = isNaN(parsed) ? 0 : parsed.getTime();
     }
-
-    track('timer', 'view');
 
     var nums = {
       d: el.querySelector('[data-u="d"]'),
@@ -184,14 +196,34 @@
     tick();
   }
 
-  // ─── Trust badges ─────────────────────────────────────────────────────────
-  function renderTrust(s) {
-    var badges = (s.badges || []).filter(function (b) { return b && b.text; });
-    if (!badges.length) return;
-    var anchor = findAnchor(s.anchorSelector) || document.querySelector('main');
-    if (!anchor) return;
+  function renderTimer(s) {
+    if (!isProductPage()) return;
 
-    var bid = 'cb-trust';
+    var mounts = document.querySelectorAll('[data-convertly-widget="timer"]');
+    if (mounts.length) {
+      mounts.forEach(function (mount) {
+        var el = buildTimerElement(s);
+        mount.appendChild(el);
+        startTimer(el, s);
+      });
+      track('timer', 'view');
+      return;
+    }
+
+    var anchor = findAnchor(s.anchorSelector);
+    if (!anchor) return;
+    var el = buildTimerElement(s);
+    anchor.insertAdjacentElement('afterend', el);
+    track('timer', 'view');
+    startTimer(el, s);
+  }
+
+  // ─── Trust badges ─────────────────────────────────────────────────────────
+  // Same placed-block-first, heuristic-fallback pattern as the timer above.
+  var trustInstanceCount = 0;
+
+  function buildTrustElement(s, badges) {
+    var bid = 'cb-trust-' + (trustInstanceCount++);
     var needsScroll = s.layout === 'scroll' || s.mobileLayout === 'scroll';
 
     var wrap = document.createElement('div');
@@ -260,7 +292,25 @@
       wrap.appendChild(buildList(false));
     }
 
-    anchor.insertAdjacentElement('afterend', wrap);
+    return wrap;
+  }
+
+  function renderTrust(s) {
+    var badges = (s.badges || []).filter(function (b) { return b && b.text; });
+    if (!badges.length) return;
+
+    var mounts = document.querySelectorAll('[data-convertly-widget="trust"]');
+    if (mounts.length) {
+      mounts.forEach(function (mount) {
+        mount.appendChild(buildTrustElement(s, badges));
+      });
+      track('trust', 'view');
+      return;
+    }
+
+    var anchor = findAnchor(s.anchorSelector) || document.querySelector('main');
+    if (!anchor) return;
+    anchor.insertAdjacentElement('afterend', buildTrustElement(s, badges));
     track('trust', 'view');
   }
 

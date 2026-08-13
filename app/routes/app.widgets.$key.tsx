@@ -317,7 +317,7 @@ function TimerFields({ settings: s, disabled }: { settings: TimerSettings; disab
         onChange={setAnchorSelector}
         autoComplete="off"
         disabled={disabled}
-        helpText="Timer is placed right after the buy-now form by default. Only set this if it lands in the wrong spot on your theme."
+        helpText="From the dashboard, use “Place precisely in theme” to drag this into any section instead — that always wins. Without it, the timer auto-places right after the buy-now form; only set a selector below if that default lands in the wrong spot."
       />
     </FormLayout>
   );
@@ -400,7 +400,7 @@ function TrustFields({ settings: s, disabled }: { settings: TrustSettings; disab
         onChange={setAnchorSelector}
         autoComplete="off"
         disabled={disabled}
-        helpText="Badges are placed right after the buy-now form by default. Only set this if it lands in the wrong spot on your theme."
+        helpText="From the dashboard, use “Place precisely in theme” to drag this into any section instead — that always wins. Without it, badges auto-place right after the buy-now form; only set a selector below if that default lands in the wrong spot."
       />
     </FormLayout>
   );

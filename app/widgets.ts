@@ -12,7 +12,10 @@ export type WidgetKey = "bar" | "timer" | "trust" | "satc" | "popup";
 
 export const WIDGET_KEYS: WidgetKey[] = ["bar", "timer", "trust", "satc", "popup"];
 
-export const WIDGET_META: Record<WidgetKey, { name: string; desc: string; emoji: string; proOnly: boolean }> = {
+export const WIDGET_META: Record<
+  WidgetKey,
+  { name: string; desc: string; emoji: string; proOnly: boolean; blockHandle?: string }
+> = {
   bar: {
     name: "Announcement Bar",
     desc: "Rotating messages with optional CTA button. Supports sticky mode.",
@@ -24,12 +27,17 @@ export const WIDGET_META: Record<WidgetKey, { name: string; desc: string; emoji:
     desc: "Fixed date or evergreen mode. Drives urgency on product pages.",
     emoji: "⏱",
     proOnly: false,
+    // Auto-placed near the buy-now form by default. blockHandle lets the
+    // dashboard offer a deep link to place it precisely instead — same
+    // idea as Judge.me's placeable blocks (e.g. their "Star Ratings" block).
+    blockHandle: "countdown-timer",
   },
   trust: {
     name: "Trust Badges",
     desc: "Up to 6 customizable badges with your own icons.",
     emoji: "🛡️",
     proOnly: false,
+    blockHandle: "trust-badges",
   },
   satc: {
     name: "Sticky Add to Cart",

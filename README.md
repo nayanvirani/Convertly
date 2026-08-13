@@ -17,7 +17,7 @@ extensions/convertly/
 
 `convertly.js` fetches per-shop widget config (`app/routes/api.widgets-config.tsx`) from this app's own backend and renders each enabled widget's DOM/behavior itself — there's no per-widget Liquid schema anymore. Merchants configure everything (text, colors, which collection, on/off) from **Convertly → Dashboard → Configure** inside the embedded app (`app/routes/app.widgets.$key.tsx`), backed by the `widget_settings` table in Postgres. See `app/widgets.ts` for the full settings shape per widget.
 
-Countdown Timer and Trust Badges (previously drag-and-place app blocks) are now placed via a JS heuristic — next to the buy-now form on product pages by default, with an optional CSS-selector override per widget if a theme's markup doesn't match.
+Countdown Timer and Trust Badges also ship as real, merchant-placeable app blocks (`blocks/countdown-timer.liquid`, `blocks/trust-badges.liquid` — target: `"section"`), same idea as Judge.me's placeable blocks (e.g. their "Star Ratings" block): drag one into any section for exact control over where it renders. `convertly.js` looks for a placed block's mount point first; if the merchant never adds one, it falls back to a JS heuristic (next to the buy-now form on product pages), with an optional CSS-selector override per widget if that default doesn't match a theme's markup. Either way settings live in the Convertly dashboard, not in a Liquid `{% schema %}`.
 
 ## Feature notes
 
