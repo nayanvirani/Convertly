@@ -219,7 +219,12 @@
     if (s.layout === 'vertical') {
       css += '#' + bid + ' .cb-trust { flex-direction: column; align-items: flex-start; }';
     } else if (s.layout === 'scroll') {
-      css += '#' + bid + ' { overflow: hidden; } #' + bid + ' .cb-trust-track { display:flex; width:max-content; animation: cbmarquee ' + s.scrollSpeed + 's linear infinite; } #' + bid + ' .cb-trust { flex-wrap: nowrap; } #' + bid + ' .cb-trust-track:hover { animation-play-state: paused; }';
+      // Note: the animation always travels exactly one copy's width per
+      // `scrollSpeed` seconds regardless of how many copies end up in the
+      // track (percentage shift x total track width = one copy's pixel
+      // width, always) — see fillMarqueeTrack() below, which decides how
+      // many copies are actually needed and sets --cb-marquee-shift.
+      css += '#' + bid + ' { overflow: hidden; } #' + bid + ' .cb-trust-track { display:flex; width:max-content; animation: cbmarquee ' + s.scrollSpeed + 's linear infinite; } #' + bid + ' .cb-trust { flex-wrap: nowrap; flex: none; } #' + bid + ' .cb-trust-track:hover { animation-play-state: paused; }';
     }
     if (needsScroll && s.layout !== 'scroll') {
       // Desktop layout itself isn't scroll mode (it's 'horizontal',
@@ -233,16 +238,20 @@
       // or the vertical desktop layout would skip it and keep the bug.
       css += '#' + bid + ' .cb-trust--dupe { display: none; }';
     }
-    css += '@keyframes cbmarquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }';
+    css += '@keyframes cbmarquee { from { transform: translateX(0); } to { transform: translateX(var(--cb-marquee-shift, -50%)); } }';
     var mob = s.mobileLayout;
     if (mob && mob !== 'same') {
       css += '@media (max-width:749px){';
       if (mob === 'vertical') {
-        css += '#' + bid + ' .cb-trust{flex-direction:column!important;align-items:flex-start;animation:none!important;} #' + bid + ' .cb-trust--dupe{display:none!important;}';
+        // Also has to explicitly stop .cb-trust-track's own animation —
+        // it's the track that carries `animation: cbmarquee…`, not the
+        // list, so overriding animation on .cb-trust alone (as this used
+        // to do) left the marquee running underneath the column layout.
+        css += '#' + bid + ' .cb-trust{flex-direction:column!important;align-items:flex-start;animation:none!important;} #' + bid + ' .cb-trust-track{display:block!important;width:auto!important;animation:none!important;overflow:visible!important;} #' + bid + ' .cb-trust--dupe{display:none!important;}';
       } else if (mob === 'horizontal') {
-        css += '#' + bid + ' .cb-trust{flex-direction:row!important;flex-wrap:wrap!important;animation:none!important;} #' + bid + ' .cb-trust--dupe{display:none!important;}';
+        css += '#' + bid + ' .cb-trust{flex-direction:row!important;flex-wrap:wrap!important;animation:none!important;} #' + bid + ' .cb-trust-track{display:block!important;width:auto!important;animation:none!important;overflow:visible!important;} #' + bid + ' .cb-trust--dupe{display:none!important;}';
       } else if (mob === 'scroll' && s.layout !== 'scroll') {
-        css += '#' + bid + '{overflow:hidden;} #' + bid + ' .cb-trust-track{display:flex;width:max-content;animation:cbmarquee ' + s.scrollSpeed + 's linear infinite;} #' + bid + ' .cb-trust{flex-direction:row!important;flex-wrap:nowrap!important;} #' + bid + ' .cb-trust--dupe{display:flex!important;}';
+        css += '#' + bid + '{overflow:hidden;} #' + bid + ' .cb-trust-track{display:flex;width:max-content;animation:cbmarquee ' + s.scrollSpeed + 's linear infinite;} #' + bid + ' .cb-trust{flex-direction:row!important;flex-wrap:nowrap!important;flex:none!important;} #' + bid + ' .cb-trust--dupe{display:flex!important;}';
       }
       css += '}';
     }
@@ -292,6 +301,40 @@
     return wrap;
   }
 
+  // The 2-copy marquee technique (real list + one hidden duplicate) only
+  // loops seamlessly if those 2 copies together are at least as wide as
+  // the space they scroll through — with a short badge list on a wide
+  // screen they're not, leaving a blank gap after they scroll past. Once
+  // the element is actually in the page (so real widths are measurable),
+  // clone the list as many more times as needed to guarantee full
+  // coverage, and tell the CSS animation exactly how far one copy-width
+  // is so the loop still lines up. No-ops instantly if the ticker isn't
+  // the active layout at the current viewport width (display isn't flex).
+  function fillMarqueeTrack(wrapEl) {
+    var trackEl = wrapEl.querySelector('.cb-trust-track');
+    if (!trackEl) return;
+    if (getComputedStyle(trackEl).display !== 'flex') return;
+
+    var first = trackEl.querySelector('.cb-trust');
+    if (!first) return;
+    var singleWidth = first.getBoundingClientRect().width;
+    var containerWidth = wrapEl.getBoundingClientRect().width;
+    if (!singleWidth || !containerWidth) return;
+
+    var copiesNeeded = Math.min(20, Math.max(2, Math.ceil((containerWidth * 2) / singleWidth)));
+    var have = trackEl.children.length;
+    for (var i = have; i < copiesNeeded; i++) {
+      var clone = first.cloneNode(true);
+      clone.classList.add('cb-trust--dupe');
+      clone.setAttribute('aria-hidden', 'true');
+      trackEl.appendChild(clone);
+    }
+    // Percentage shift x total track width = one copy's pixel width no
+    // matter how many copies there are, so this keeps the configured
+    // scroll speed feeling the same regardless of content length.
+    trackEl.style.setProperty('--cb-marquee-shift', (-100 / copiesNeeded).toFixed(4) + '%');
+  }
+
   function renderTrust(s) {
     // Requires an explicitly placed block — no auto-placement fallback.
     var badges = (s.badges || []).filter(function (b) { return b && b.text; });
@@ -300,7 +343,9 @@
     var mounts = document.querySelectorAll('[data-convertly-widget="trust"]');
     if (!mounts.length) return;
     mounts.forEach(function (mount) {
-      mount.appendChild(buildTrustElement(s, badges));
+      var el = buildTrustElement(s, badges);
+      mount.appendChild(el);
+      fillMarqueeTrack(el);
     });
     track('trust', 'view');
   }
