@@ -160,8 +160,6 @@ export default function WidgetSettings() {
   const meta = WIDGET_META[key as WidgetKey];
   const locked = meta.proOnly && !isPro;
 
-  const [isEnabled, setIsEnabled] = useState(enabled);
-
   return (
     <Page title={`${meta.emoji} ${meta.name}`} backAction={{ url: "/app" }}>
       <BlockStack gap="400">
@@ -179,36 +177,71 @@ export default function WidgetSettings() {
           <Banner tone="critical">{actionData.message}</Banner>
         )}
 
-        <Card>
-          <Form method="post">
-            <BlockStack gap="400">
-              <InlineStack align="space-between" blockAlign="center">
-                <Text as="p" variant="bodySm" tone="subdued">{meta.desc}</Text>
-                <Checkbox
-                  label="Enabled"
-                  checked={isEnabled}
-                  onChange={setIsEnabled}
-                  name="enabled"
-                  disabled={locked}
-                />
-              </InlineStack>
-
-              {key === "bar" && <BarFields settings={settings as BarSettings} disabled={locked} />}
-              {key === "timer" && <TimerFields settings={settings as TimerSettings} disabled={locked} />}
-              {key === "trust" && <TrustFields settings={settings as TrustSettings} disabled={locked} />}
-              {key === "satc" && <SatcFields settings={settings as SatcSettings} disabled={locked} />}
-              {key === "popup" && <PopupFields settings={settings as PopupSettings} disabled={locked} />}
-
-              <InlineStack align="end">
-                <Button submit variant="primary" loading={saving} disabled={locked}>
-                  Save
-                </Button>
-              </InlineStack>
-            </BlockStack>
-          </Form>
-        </Card>
+        {/* Keyed by the actual loaded data so the whole form (the Enabled
+            checkbox and every field's local state below) remounts fresh
+            whenever the server's data changes, instead of Remix reusing the
+            same component instance across the Save → redirect → reload
+            cycle and leaving stale, already-submitted values on screen. */}
+        <SettingsForm
+          key={JSON.stringify({ enabled, settings })}
+          widgetKey={key as WidgetKey}
+          meta={meta}
+          enabled={enabled}
+          settings={settings}
+          locked={locked}
+          saving={saving}
+        />
       </BlockStack>
     </Page>
+  );
+}
+
+function SettingsForm({
+  widgetKey,
+  meta,
+  enabled,
+  settings,
+  locked,
+  saving,
+}: {
+  widgetKey: WidgetKey;
+  meta: (typeof WIDGET_META)[WidgetKey];
+  enabled: boolean;
+  settings: unknown;
+  locked: boolean;
+  saving: boolean;
+}) {
+  const [isEnabled, setIsEnabled] = useState(enabled);
+
+  return (
+    <Card>
+      <Form method="post">
+        <BlockStack gap="400">
+          <InlineStack align="space-between" blockAlign="center">
+            <Text as="p" variant="bodySm" tone="subdued">{meta.desc}</Text>
+            <Checkbox
+              label="Enabled"
+              checked={isEnabled}
+              onChange={setIsEnabled}
+              name="enabled"
+              disabled={locked}
+            />
+          </InlineStack>
+
+          {widgetKey === "bar" && <BarFields settings={settings as BarSettings} disabled={locked} />}
+          {widgetKey === "timer" && <TimerFields settings={settings as TimerSettings} disabled={locked} />}
+          {widgetKey === "trust" && <TrustFields settings={settings as TrustSettings} disabled={locked} />}
+          {widgetKey === "satc" && <SatcFields settings={settings as SatcSettings} disabled={locked} />}
+          {widgetKey === "popup" && <PopupFields settings={settings as PopupSettings} disabled={locked} />}
+
+          <InlineStack align="end">
+            <Button submit variant="primary" loading={saving} disabled={locked}>
+              Save
+            </Button>
+          </InlineStack>
+        </BlockStack>
+      </Form>
+    </Card>
   );
 }
 
