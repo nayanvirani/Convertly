@@ -13,6 +13,7 @@ import {
 } from "@shopify/polaris";
 import { authenticate } from "../shopify.server";
 import { getShopPlan, listWidgetSettings } from "../db.server";
+import { updateApiBaseMetafield } from "../plan.server";
 import { WIDGET_KEYS, WIDGET_META } from "../widgets";
 
 // One single app embed now covers every widget — settings live in this
@@ -45,7 +46,7 @@ function blockDeepLink(shop: string, apiKey: string, blockHandle: string): strin
 // load; now it only happens where it actually matters (right after the
 // merchant picks a plan on Shopify's pricing page).
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
+  const { admin, session } = await authenticate.admin(request);
 
   // Shopify redirects back with ?plan_handle after the merchant picks a plan.
   // Forward to the billing page which verifies and persists the plan change.
@@ -58,6 +59,20 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     getShopPlan(session.shop),
     listWidgetSettings(session.shop),
   ]);
+
+  // NOT plan polling (that's gone, on purpose, and stays gone) — this is a
+  // one-off infrastructure write. The storefront embed reads
+  // app.metafields.convertly.api_base to know where to fetch widget config
+  // from; a shop that never visits the billing page would otherwise never
+  // get it set at all, and the embed would silently do nothing forever with
+  // no visible error. Fire-and-forget so it never slows down the page.
+  admin.graphql(`{ currentAppInstallation { id } }`)
+    .then((res: Response) => res.json())
+    .then((body: any) => {
+      const id = body?.data?.currentAppInstallation?.id;
+      if (id) return updateApiBaseMetafield(admin, id);
+    })
+    .catch((err: unknown) => console.error("[app._index] api_base metafield check failed:", err));
 
   return json({
     isPro: plan === "pro",
