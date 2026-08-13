@@ -39,8 +39,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const plan = await getShopPlan(session.shop);
   const isPro = plan === "pro";
   const row = await getWidgetSettings(session.shop, key);
+  const saved = new URL(request.url).searchParams.get("saved") === "1";
 
-  return json({ key, isPro, enabled: row.enabled, settings: row.settings });
+  return json({ key, isPro, enabled: row.enabled, settings: row.settings, saved });
 }
 
 export async function action({ request, params }: ActionFunctionArgs) {
@@ -152,7 +153,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
 // ─── UI ─────────────────────────────────────────────────────────────────────
 
 export default function WidgetSettings() {
-  const { key, isPro, enabled, settings } = useLoaderData<typeof loader>();
+  const { key, isPro, enabled, settings, saved } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const nav = useNavigation();
   const saving = nav.state === "submitting";
@@ -167,6 +168,11 @@ export default function WidgetSettings() {
         {locked && (
           <Banner tone="warning" title="Pro plan required">
             <Button url="/app/billing">Upgrade to Pro</Button>
+          </Banner>
+        )}
+        {saved && !actionData && (
+          <Banner tone="success">
+            Saved — {enabled ? "this widget is now enabled." : "this widget is currently off (Enabled is unchecked)."}
           </Banner>
         )}
         {actionData && "message" in actionData && (
