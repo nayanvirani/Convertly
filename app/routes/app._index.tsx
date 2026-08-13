@@ -19,7 +19,7 @@ import { WIDGET_KEYS, WIDGET_META } from "../widgets";
 // dashboard (Postgres), not in per-widget theme-editor schema panels. The
 // merchant only ever needs to enable the embed once; everything else is
 // "Configure" → toggle on → done.
-const EMBED_HANDLE = "boostify";
+const EMBED_HANDLE = "convertly";
 
 function embedDeepLink(shop: string, apiKey: string): string {
   const ref = `${apiKey}/${EMBED_HANDLE}`;

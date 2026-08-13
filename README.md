@@ -8,14 +8,14 @@ All-in-one conversion widget suite: Announcement Bar, Countdown Timer, Trust Bad
 extensions/convertly/
 ├── shopify.extension.toml
 ├── blocks/
-│   └── boostify.liquid           the one app embed — injects config + boostify.js
+│   └── convertly.liquid           the one app embed — injects config + convertly.js
 └── assets/
     ├── cb-core.css                shared styles, all classes prefixed cb-
-    └── boostify.js                fetches /api/widgets-config and renders whichever
+    └── convertly.js                fetches /api/widgets-config and renders whichever
                                     widgets are enabled, entirely client-side
 ```
 
-`boostify.js` fetches per-shop widget config (`app/routes/api.widgets-config.tsx`) from this app's own backend and renders each enabled widget's DOM/behavior itself — there's no per-widget Liquid schema anymore. Merchants configure everything (text, colors, which collection, on/off) from **Convertly → Dashboard → Configure** inside the embedded app (`app/routes/app.widgets.$key.tsx`), backed by the `widget_settings` table in Postgres. See `app/widgets.ts` for the full settings shape per widget.
+`convertly.js` fetches per-shop widget config (`app/routes/api.widgets-config.tsx`) from this app's own backend and renders each enabled widget's DOM/behavior itself — there's no per-widget Liquid schema anymore. Merchants configure everything (text, colors, which collection, on/off) from **Convertly → Dashboard → Configure** inside the embedded app (`app/routes/app.widgets.$key.tsx`), backed by the `widget_settings` table in Postgres. See `app/widgets.ts` for the full settings shape per widget.
 
 Countdown Timer and Trust Badges (previously drag-and-place app blocks) are now placed via a JS heuristic — next to the buy-now form on product pages by default, with an optional CSS-selector override per widget if a theme's markup doesn't match.
 

@@ -1,9 +1,9 @@
 // Shared helpers for writing app-installation metafields that Liquid can
 // read without a runtime API call:
-//   boostify.plan      — "pro" | "free" (kept for any future Liquid use;
+//   convertly.plan      — "pro" | "free" (kept for any future Liquid use;
 //                         the storefront embed itself gets plan-gating from
 //                         /api/widgets-config, not from this metafield)
-//   boostify.api_base  — this app's own base URL, so the theme embed never
+//   convertly.api_base  — this app's own base URL, so the theme embed never
 //                         hardcodes a Railway domain (that domain can change
 //                         across deploys/projects — it did once already).
 
@@ -29,14 +29,14 @@ export async function updatePlanMetafield(
         metafieldsSet(metafields: [
           {
             ownerId: $ownerId
-            namespace: "boostify"
+            namespace: "convertly"
             key: "plan"
             value: $plan
             type: "single_line_text_field"
           },
           {
             ownerId: $ownerId
-            namespace: "boostify"
+            namespace: "convertly"
             key: "api_base"
             value: $apiBase
             type: "single_line_text_field"

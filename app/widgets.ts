@@ -6,7 +6,7 @@
 //
 // Replaces what used to be 5 separate Liquid {% schema %} blocks — settings
 // now live in Postgres and are rendered client-side by the single
-// boostify.js asset instead of server-rendered Liquid.
+// convertly.js asset instead of server-rendered Liquid.
 
 export type WidgetKey = "bar" | "timer" | "trust" | "satc" | "popup";
 

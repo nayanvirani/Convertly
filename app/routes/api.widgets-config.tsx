@@ -1,4 +1,4 @@
-// Public config endpoint for the storefront embed's JS (boostify.js).
+// Public config endpoint for the storefront embed's JS (convertly.js).
 // Replaces per-widget Liquid {% schema %} settings — the merchant configures
 // everything in the Convertly admin dashboard, and this endpoint hands the
 // storefront script a JSON blob of whatever's enabled for their plan.

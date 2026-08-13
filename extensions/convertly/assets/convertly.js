@@ -1,11 +1,11 @@
-/* Boostify — single embed, JSON-driven widget renderer.
+/* Convertly — single embed, JSON-driven widget renderer.
  * Fetches /api/widgets-config for this shop and renders whichever widgets
  * are enabled. Uses the shop's public storefront JSON endpoints
  * (/products/*.js, /collections/*.json) for live product data — no admin
  * API calls happen from the browser.
  */
 (function () {
-  var cfg = document.getElementById('boostify-config');
+  var cfg = document.getElementById('convertly-config');
   if (!cfg) return;
   var shop = cfg.getAttribute('data-shop');
   var api = cfg.getAttribute('data-api');
