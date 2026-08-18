@@ -181,8 +181,13 @@ async function refreshAccessToken(shop: string, refreshToken: string): Promise<R
   if (!apiKey || !apiSecret) return { ok: false, error: "Missing API credentials" };
 
   try {
+    // NOT /admin/oauth/token — that's the token-exchange endpoint (used by
+    // exchangeToExpiringToken() above for the initial grant). Refreshing an
+    // already-issued expiring token via grant_type=refresh_token is a
+    // different, separate endpoint. Hitting the wrong one here was silently
+    // failing every refresh attempt (404/403) for every installed shop.
     const res = await withTimeout(
-      fetch(`https://${shop}/admin/oauth/token`, {
+      fetch(`https://${shop}/admin/oauth/access_token`, {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: new URLSearchParams({
