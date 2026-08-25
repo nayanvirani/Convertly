@@ -14,6 +14,17 @@ async function deleteShopSessions(shop: string): Promise<void> {
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { topic, shop, payload, admin } = await authenticate.webhook(request);
 
+  // Every topic below is logged at entry — deleteShopSessions/
+  // clearShopPlan/deleteWidgetSettings already individually try/catch their
+  // own DB errors (so Promise.all below can never reject and this handler
+  // can never legitimately return non-200 for its own reasons), but Shopify's
+  // dashboard has shown ERR deliveries for this endpoint with zero
+  // corresponding output in our own logs — meaning the request may not have
+  // reached a running instance at all (a platform-level blip, not a code
+  // bug). This log line at least proves whether a delivery attempt landed
+  // here, which the previous silence made impossible to tell.
+  console.log(`[webhook] received topic=${topic} shop=${shop}`);
+
   switch (topic) {
     case "APP_UNINSTALLED":
       // Wipe every shop-scoped table, not just sessions — otherwise
@@ -24,6 +35,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         clearShopPlan(shop),
         deleteWidgetSettings(shop),
       ]);
+      console.log(`[webhook] APP_UNINSTALLED cleanup done shop=${shop}`);
       break;
 
     case "APP_SCOPES_UPDATE": {
@@ -77,6 +89,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         clearShopPlan(shop),
         deleteWidgetSettings(shop),
       ]);
+      console.log(`[webhook] SHOP_REDACT cleanup done shop=${shop}`);
       break;
 
     default:
