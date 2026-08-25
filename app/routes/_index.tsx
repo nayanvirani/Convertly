@@ -18,9 +18,7 @@ export const meta: MetaFunction = () => [
   },
 ];
 
-// Placeholder — the real App Store listing URL only exists once the app is
-// actually published; update this once you have it.
-const APP_STORE_URL = "https://apps.shopify.com/convertly";
+const APP_STORE_URL = "https://apps.shopify.com/convertly-3";
 
 function Logo() {
   return (
