@@ -112,6 +112,12 @@
 .cb-trust-track { display: block; }
 
 /* ---------- Sticky add to cart ---------- */
+/* Always visible from the moment it renders — no fade-in tied to scroll
+   position or to finding a particular element on the page to watch. That
+   detection varied unpredictably across themes and was the actual reason
+   the bar went missing entirely on some of them; always-on has nothing to
+   get wrong. convertly.js still adds cb-satc--visible for backwards
+   compatibility, but .cb-satc alone is enough to be fully shown now. */
 .cb-satc {
   position: fixed;
   left: 0;
@@ -124,10 +130,7 @@
   padding: 10px max(14px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
   background: #fff;
   box-shadow: 0 -2px 14px rgba(0, 0, 0, 0.12);
-  transform: translateY(110%);
-  transition: transform 0.25s ease;
 }
-.cb-satc.cb-satc--visible { transform: translateY(0); }
 .cb-satc__img {
   width: 44px;
   height: 44px;
@@ -220,6 +223,5 @@
 
 @media (prefers-reduced-motion: reduce) {
   .cb-bar[data-rotating] .cb-bar__msg,
-  .cb-satc,
   .cb-pop { transition: none; }
 }
