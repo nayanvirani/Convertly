@@ -61,6 +61,21 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
   const form = await request.formData();
 
+  // TEMPORARY diagnostic: a merchant reported checking "Stick while
+  // scrolling" / "Show close button" on the bar widget, saving, and having
+  // them come back unchecked after reload — the DB row's updated_at
+  // confirmed the save itself reached Postgres, so the checked state must
+  // not have been in the submitted FormData to begin with. Logging the raw
+  // entries here (not just our parsed guess at them) to see directly what
+  // the browser actually sent, since guessing at the Polaris Checkbox
+  // internals hasn't turned up a reproducible cause. Remove once resolved.
+  if (form.get("intent") !== "toggle") {
+    console.log(
+      `[widgets] raw form for key=${key} shop=${session.shop}:`,
+      JSON.stringify(Object.fromEntries(form.entries()))
+    );
+  }
+
   // Instant-save toggle from the dashboard/settings-page switch — separate
   // from the full settings form below, and deliberately explicit
   // ("true"/"false" sent directly by JS) rather than relying on a checkbox's
