@@ -183,10 +183,8 @@ export default function BillingPage() {
                   <Text as="p" variant="bodySm" tone="subdued">or $530/year (save ~10%)</Text>
                 </BlockStack>
               </InlineStack>
-              {isPro ? (
+              {isPro && (
                 <Badge tone="success">Active subscription</Badge>
-              ) : (
-                <Badge tone="info">7-day free trial included</Badge>
               )}
               <Divider />
               <Text as="p" variant="bodyMd" tone="subdued">Everything in Free, plus:</Text>
@@ -199,7 +197,7 @@ export default function BillingPage() {
               </List>
               {!isPro ? (
                 <Button variant="primary" size="large" onClick={openPricingPage}>
-                  Start 7-day free trial
+                  Upgrade to Pro
                 </Button>
               ) : (
                 <Button variant="plain" tone="critical" onClick={openPricingPage}>

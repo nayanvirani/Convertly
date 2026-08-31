@@ -314,14 +314,24 @@ export async function upsertWidgetSettings<K extends WidgetKey>(
   settings: WidgetSettingsMap[K]
 ): Promise<void> {
   await ready();
-  await pool().query(
-    `INSERT INTO widget_settings (shop, widget, enabled, settings, updated_at)
-     VALUES ($1, $2, false, $3, now())
-     ON CONFLICT (shop, widget) DO UPDATE
-       SET settings = excluded.settings,
-           updated_at = now()`,
-    [shop, widget, JSON.stringify(settings)]
-  );
+  try {
+    await pool().query(
+      `INSERT INTO widget_settings (shop, widget, enabled, settings, updated_at)
+       VALUES ($1, $2, false, $3, now())
+       ON CONFLICT (shop, widget) DO UPDATE
+         SET settings = excluded.settings,
+             updated_at = now()`,
+      [shop, widget, JSON.stringify(settings)]
+    );
+  } catch (err) {
+    // Unlike the fire-and-forget cleanup helpers elsewhere in this file,
+    // this one has to rethrow — a merchant just clicked Save and needs to
+    // actually find out it didn't take (the route action turns this into
+    // a clean error banner) instead of silently losing their edits while
+    // the UI still says "Settings saved."
+    console.error("[db] upsertWidgetSettings error:", err);
+    throw err;
+  }
 }
 
 /**
@@ -336,14 +346,23 @@ export async function setWidgetEnabled<K extends WidgetKey>(
   enabled: boolean
 ): Promise<void> {
   await ready();
-  await pool().query(
-    `INSERT INTO widget_settings (shop, widget, enabled, settings, updated_at)
-     VALUES ($1, $2, $3, $4, now())
-     ON CONFLICT (shop, widget) DO UPDATE
-       SET enabled = excluded.enabled,
-           updated_at = now()`,
-    [shop, widget, enabled, JSON.stringify(WIDGET_DEFAULTS[widget])]
-  );
+  try {
+    await pool().query(
+      `INSERT INTO widget_settings (shop, widget, enabled, settings, updated_at)
+       VALUES ($1, $2, $3, $4, now())
+       ON CONFLICT (shop, widget) DO UPDATE
+         SET enabled = excluded.enabled,
+             updated_at = now()`,
+      [shop, widget, enabled, JSON.stringify(WIDGET_DEFAULTS[widget])]
+    );
+  } catch (err) {
+    // Same reasoning as upsertWidgetSettings above — the toggle's own
+    // fetcher already knows how to render a failure banner from a thrown
+    // action, but only if the action actually gets a chance to catch this
+    // and respond with one instead of the whole request 500ing.
+    console.error("[db] setWidgetEnabled error:", err);
+    throw err;
+  }
 }
 
 /** Remove all widget config for a shop (called on uninstall). */

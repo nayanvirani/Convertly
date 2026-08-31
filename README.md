@@ -63,4 +63,4 @@ For the bar/timer/trust blocks, `convertly.js` looks for the block's `[data-conv
 ## Pricing suggestion
 
 - **Free** — Announcement bar + trust badges, small "Powered by" link
-- **Pro $49/mo or $530/yr** (~10% off annual) — everything, no branding, priority support, 7-day trial
+- **Pro $49/mo or $530/yr** (~10% off annual) — everything, no branding, priority support

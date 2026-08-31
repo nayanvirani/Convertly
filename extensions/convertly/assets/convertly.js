@@ -395,119 +395,138 @@
   // (there's nowhere more "placed" a sticky bottom bar could be anyway).
   function renderSatc(s) {
     if (!isProductPage()) return;
-    var mainForm = document.querySelector('form[action*="/cart/add"]');
-    if (!mainForm) return;
 
     var handle = (window.location.pathname.match(/\/products\/([^/?#]+)/) || [])[1];
     if (!handle) return;
 
-    fetch('/products/' + handle + '.js')
-      .then(function (r) { return r.ok ? r.json() : Promise.reject(); })
-      .then(function (product) {
-        if (!product.available) return; // nothing useful to stick around for
-        var variant = product.variants.filter(function (v) { return v.available; })[0] || product.variants[0];
+    // Some themes render the buy-now form late (lazy-loaded sections, app
+    // blocks whose own script injects markup after ours already ran) — one
+    // synchronous check the instant our deferred script runs can miss it
+    // entirely, which used to silently disable the whole widget on those
+    // themes. Retry with backoff for a few seconds; even if a form is
+    // never found, init() below still renders using a scroll-based
+    // fallback instead of giving up.
+    var attempts = 0;
+    (function findForm() {
+      var mainForm = document.querySelector('form[action*="/cart/add"]');
+      if (mainForm || attempts >= 6) { init(mainForm); return; }
+      attempts++;
+      setTimeout(findForm, attempts * 400);
+    })();
 
-        var bar = document.createElement('div');
-        bar.className = 'cb-satc';
-        bar.id = 'cb-satc';
-        bar.setAttribute('aria-hidden', 'true');
+    function init(mainForm) {
+      fetch('/products/' + handle + '.js')
+        .then(function (r) { return r.ok ? r.json() : Promise.reject(); })
+        .then(function (product) {
+          if (!product.available) return; // nothing useful to stick around for
+          var variant = product.variants.filter(function (v) { return v.available; })[0] || product.variants[0];
 
-        var html = '';
-        if (product.featured_image) {
-          html += '<img class="cb-satc__img" src="' + product.featured_image + '&width=88" alt="" width="44" height="44" loading="lazy">';
-        }
-        html += '<div class="cb-satc__info"><p class="cb-satc__title"></p><span class="cb-satc__price" data-cb-price></span></div>';
-        if (product.variants.length > 1) {
-          html += '<select class="cb-satc__variants" data-cb-variants aria-label="Select variant"></select>';
-        } else {
-          html += '<input type="hidden" data-cb-variants value="' + product.variants[0].id + '">';
-        }
-        html += '<button class="cb-satc__btn" type="button" data-cb-add style="background:' + s.btnColor + ';">' + s.btnText + '</button>';
-        bar.innerHTML = html;
+          var bar = document.createElement('div');
+          bar.className = 'cb-satc';
+          bar.id = 'cb-satc';
+          bar.setAttribute('aria-hidden', 'true');
 
-        bar.querySelector('.cb-satc__title').textContent = product.title;
-        bar.querySelector('[data-cb-price]').textContent = money(variant.price);
+          var html = '';
+          if (product.featured_image) {
+            html += '<img class="cb-satc__img" src="' + product.featured_image + '&width=88" alt="" width="44" height="44" loading="lazy">';
+          }
+          html += '<div class="cb-satc__info"><p class="cb-satc__title"></p><span class="cb-satc__price" data-cb-price></span></div>';
+          if (product.variants.length > 1) {
+            html += '<select class="cb-satc__variants" data-cb-variants aria-label="Select variant"></select>';
+          } else {
+            html += '<input type="hidden" data-cb-variants value="' + product.variants[0].id + '">';
+          }
+          html += '<button class="cb-satc__btn" type="button" data-cb-add style="background:' + s.btnColor + ';">' + s.btnText + '</button>';
+          bar.innerHTML = html;
 
-        var select = bar.querySelector('select[data-cb-variants]');
-        if (select) {
-          product.variants.forEach(function (v) {
-            var opt = document.createElement('option');
-            opt.value = v.id;
-            opt.setAttribute('data-price', money(v.price));
-            if (!v.available) opt.disabled = true;
-            if (v.id === variant.id) opt.selected = true;
-            opt.textContent = v.title;
-            select.appendChild(opt);
-          });
-        }
+          bar.querySelector('.cb-satc__title').textContent = product.title;
+          bar.querySelector('[data-cb-price]').textContent = money(variant.price);
 
-        document.body.appendChild(bar);
+          var select = bar.querySelector('select[data-cb-variants]');
+          if (select) {
+            product.variants.forEach(function (v) {
+              var opt = document.createElement('option');
+              opt.value = v.id;
+              opt.setAttribute('data-price', money(v.price));
+              if (!v.available) opt.disabled = true;
+              if (v.id === variant.id) opt.selected = true;
+              opt.textContent = v.title;
+              select.appendChild(opt);
+            });
+          }
 
-        var viewTracked = false;
-        if ('IntersectionObserver' in window) {
-          var io = new IntersectionObserver(function (entries) {
-            var visible = entries[0].isIntersecting;
-            bar.classList.toggle('cb-satc--visible', !visible);
-            bar.setAttribute('aria-hidden', visible ? 'true' : 'false');
-            if (!visible && !viewTracked) { viewTracked = true; track('satc', 'view'); }
-          }, { threshold: 0 });
-          io.observe(mainForm);
-        } else {
-          var onScroll = function () {
-            var show = window.scrollY > window.innerHeight * 0.6;
-            bar.classList.toggle('cb-satc--visible', show);
-            bar.setAttribute('aria-hidden', show ? 'false' : 'true');
-            if (show && !viewTracked) { viewTracked = true; track('satc', 'view'); }
-          };
-          window.addEventListener('scroll', onScroll, { passive: true });
-          onScroll();
-        }
+          document.body.appendChild(bar);
 
-        var priceEl = bar.querySelector('[data-cb-price]');
-        if (select && priceEl) {
-          select.addEventListener('change', function () {
-            var opt = select.options[select.selectedIndex];
-            if (opt && opt.getAttribute('data-price')) priceEl.textContent = opt.getAttribute('data-price');
-          });
-        }
+          var viewTracked = false;
+          // Falls back to the scroll-position check below both when the
+          // browser lacks IntersectionObserver AND when no buy-form element
+          // could be found at all after retrying — better to show the bar
+          // based on scroll position than never show it on that theme.
+          if (mainForm && 'IntersectionObserver' in window) {
+            var io = new IntersectionObserver(function (entries) {
+              var visible = entries[0].isIntersecting;
+              bar.classList.toggle('cb-satc--visible', !visible);
+              bar.setAttribute('aria-hidden', visible ? 'true' : 'false');
+              if (!visible && !viewTracked) { viewTracked = true; track('satc', 'view'); }
+            }, { threshold: 0 });
+            io.observe(mainForm);
+          } else {
+            var onScroll = function () {
+              var show = window.scrollY > window.innerHeight * 0.6;
+              bar.classList.toggle('cb-satc--visible', show);
+              bar.setAttribute('aria-hidden', show ? 'false' : 'true');
+              if (show && !viewTracked) { viewTracked = true; track('satc', 'view'); }
+            };
+            window.addEventListener('scroll', onScroll, { passive: true });
+            onScroll();
+          }
 
-        var btn = bar.querySelector('[data-cb-add]');
-        var originalText = btn ? btn.textContent : '';
-        if (btn) {
-          btn.addEventListener('click', function () {
-            var id = select ? select.value : bar.querySelector('[data-cb-variants]').value;
-            if (!id) return;
-            btn.disabled = true;
-            btn.textContent = 'Adding…';
-            track('satc', 'click');
-            fetch((window.Shopify && window.Shopify.routes ? window.Shopify.routes.root : '/') + 'cart/add.js', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ items: [{ id: parseInt(id, 10), quantity: 1 }] })
-            })
-              .then(function (r) { if (!r.ok) throw new Error('add failed'); return r.json(); })
-              .then(function () {
-                document.dispatchEvent(new CustomEvent('cb:cart:added'));
-                if (s.afterAdd === 'cart') {
-                  window.location.href = (window.Shopify && window.Shopify.routes ? window.Shopify.routes.root : '/') + 'cart';
-                  return;
-                }
-                btn.textContent = 'Added ✓';
-                fetch('/cart.js').then(function (r) { return r.json(); }).then(function (cart) {
-                  document.querySelectorAll('.cart-count-bubble, [data-cart-count]').forEach(function (el) {
-                    el.textContent = cart.item_count;
-                  });
-                }).catch(function () {});
-                setTimeout(function () { btn.textContent = originalText; btn.disabled = false; }, 2000);
+          var priceEl = bar.querySelector('[data-cb-price]');
+          if (select && priceEl) {
+            select.addEventListener('change', function () {
+              var opt = select.options[select.selectedIndex];
+              if (opt && opt.getAttribute('data-price')) priceEl.textContent = opt.getAttribute('data-price');
+            });
+          }
+
+          var btn = bar.querySelector('[data-cb-add]');
+          var originalText = btn ? btn.textContent : '';
+          if (btn) {
+            btn.addEventListener('click', function () {
+              var id = select ? select.value : bar.querySelector('[data-cb-variants]').value;
+              if (!id) return;
+              btn.disabled = true;
+              btn.textContent = 'Adding…';
+              track('satc', 'click');
+              fetch((window.Shopify && window.Shopify.routes ? window.Shopify.routes.root : '/') + 'cart/add.js', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ items: [{ id: parseInt(id, 10), quantity: 1 }] })
               })
-              .catch(function () {
-                btn.textContent = 'Try again';
-                btn.disabled = false;
-              });
-          });
-        }
-      })
-      .catch(function () { /* product fetch failed — fail silently */ });
+                .then(function (r) { if (!r.ok) throw new Error('add failed'); return r.json(); })
+                .then(function () {
+                  document.dispatchEvent(new CustomEvent('cb:cart:added'));
+                  if (s.afterAdd === 'cart') {
+                    window.location.href = (window.Shopify && window.Shopify.routes ? window.Shopify.routes.root : '/') + 'cart';
+                    return;
+                  }
+                  btn.textContent = 'Added ✓';
+                  fetch('/cart.js').then(function (r) { return r.json(); }).then(function (cart) {
+                    document.querySelectorAll('.cart-count-bubble, [data-cart-count]').forEach(function (el) {
+                      el.textContent = cart.item_count;
+                    });
+                  }).catch(function () {});
+                  setTimeout(function () { btn.textContent = originalText; btn.disabled = false; }, 2000);
+                })
+                .catch(function () {
+                  btn.textContent = 'Try again';
+                  btn.disabled = false;
+                });
+            });
+          }
+        })
+        .catch(function () { /* product fetch failed — fail silently */ });
+    }
   }
 
   // ─── Social proof popup ───────────────────────────────────────────────────

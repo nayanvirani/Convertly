@@ -68,7 +68,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
   // what got submitted.
   if (form.get("intent") === "toggle") {
     const enabled = form.get("enabled") === "true";
-    await setWidgetEnabled(session.shop, key, enabled);
+    try {
+      await setWidgetEnabled(session.shop, key, enabled);
+    } catch {
+      return json({ ok: false, message: "Couldn't save — try again." }, { status: 500 });
+    }
     return json({ ok: true, enabled });
   }
 
@@ -158,7 +162,16 @@ export async function action({ request, params }: ActionFunctionArgs) {
     }
   }
 
-  await upsertWidgetSettings(session.shop, key, settings as never);
+  try {
+    await upsertWidgetSettings(session.shop, key, settings as never);
+  } catch {
+    // Keep the merchant on this page with their just-submitted values
+    // still visible (see settingsOverride below) instead of a hard 500
+    // that discards the edit and looks exactly like "my changes didn't
+    // save" — because until now, that's exactly what a transient DB
+    // hiccup here actually did.
+    return json({ ok: false, message: "Couldn't save your changes — please try again.", settings }, { status: 500 });
+  }
   return redirect(`/app/widgets/${key}?saved=1`);
 }
 
@@ -208,18 +221,28 @@ export default function WidgetSettings() {
             fetcher state. */}
         <EnabledToggle key={key} widgetKey={key as WidgetKey} meta={meta} enabled={enabled} locked={locked} />
 
-        {/* Keyed by the actual loaded data so every field below remounts
-            fresh whenever the server's data changes, instead of Remix
-            reusing the same component instance across the Save → redirect
-            → reload cycle and leaving stale, already-submitted values on
-            screen. */}
-        <SettingsForm
-          key={JSON.stringify({ enabled, settings })}
-          widgetKey={key as WidgetKey}
-          settings={settings}
-          locked={locked}
-          saving={saving}
-        />
+        {/* On a failed save, redisplay exactly what the merchant just typed
+            (carried back on actionData) instead of falling back to the
+            last-saved settings from the loader — otherwise a DB hiccup
+            both fails the save AND silently reverts the form, compounding
+            "my changes didn't save" with "and now I have to retype them." */}
+        {(() => {
+          const displaySettings =
+            actionData && "settings" in actionData ? actionData.settings : settings;
+          return (
+            // Keyed by the actual loaded data so every field below remounts
+            // fresh whenever the server's data changes, instead of Remix
+            // reusing the same component instance across the Save →
+            // redirect → reload cycle and leaving stale values on screen.
+            <SettingsForm
+              key={JSON.stringify({ enabled, displaySettings })}
+              widgetKey={key as WidgetKey}
+              settings={displaySettings}
+              locked={locked}
+              saving={saving}
+            />
+          );
+        })()}
       </BlockStack>
     </Page>
   );
@@ -318,6 +341,55 @@ function useField<T>(initial: T) {
   return [value, setValue] as const;
 }
 
+// A plain hex TextField alone left merchants guessing at a value with no
+// visual feedback — this pairs it with a real color-picker swatch. The
+// swatch has no `name` of its own; it just writes into the same state as
+// the text field, which stays the one thing actually submitted, so typing
+// a hex code and using the picker are two ways of setting one value, never
+// two competing form fields.
+function ColorField({
+  label,
+  name,
+  value,
+  onChange,
+  disabled,
+}: {
+  label: string;
+  name: string;
+  value: string;
+  onChange: (v: string) => void;
+  disabled: boolean;
+}) {
+  // <input type="color"> only accepts strict #rrggbb — fall back to a
+  // neutral swatch value while the text field holds anything else (e.g.
+  // mid-edit, shorthand #fff, or empty), so the picker never throws.
+  const swatchValue = /^#[0-9a-fA-F]{6}$/.test(value) ? value : "#000000";
+  return (
+    <div style={{ display: "flex", gap: "8px", alignItems: "flex-end" }}>
+      <div style={{ flex: 1 }}>
+        <TextField label={label} name={name} value={value} onChange={onChange} autoComplete="off" disabled={disabled} />
+      </div>
+      <input
+        type="color"
+        aria-label={`Pick ${label.toLowerCase()}`}
+        value={swatchValue}
+        onChange={(e) => onChange(e.target.value)}
+        disabled={disabled}
+        style={{
+          width: "36px",
+          height: "36px",
+          padding: "2px",
+          border: "1px solid #c9cccf",
+          borderRadius: "6px",
+          background: "#fff",
+          cursor: disabled ? "default" : "pointer",
+          flexShrink: 0,
+        }}
+      />
+    </div>
+  );
+}
+
 function BarFields({ settings: s, disabled }: { settings: BarSettings; disabled: boolean }) {
   const [msg1, setMsg1] = useField(s.messages[0] ?? "");
   const [msg2, setMsg2] = useField(s.messages[1] ?? "");
@@ -343,8 +415,8 @@ function BarFields({ settings: s, disabled }: { settings: BarSettings; disabled:
         <TextField label="Button link" name="ctaLink" value={ctaLink} onChange={setCtaLink} autoComplete="off" disabled={disabled} />
       </FormLayout.Group>
       <FormLayout.Group>
-        <TextField label="Background color" name="bgColor" value={bgColor} onChange={setBgColor} autoComplete="off" disabled={disabled} />
-        <TextField label="Text color" name="textColor" value={textColor} onChange={setTextColor} autoComplete="off" disabled={disabled} />
+        <ColorField label="Background color" name="bgColor" value={bgColor} onChange={setBgColor} disabled={disabled} />
+        <ColorField label="Text color" name="textColor" value={textColor} onChange={setTextColor} disabled={disabled} />
         <TextField label="Font size (px)" name="fontSize" type="number" value={fontSize} onChange={setFontSize} autoComplete="off" disabled={disabled} />
       </FormLayout.Group>
       <Select
@@ -401,8 +473,8 @@ function TimerFields({ settings: s, disabled }: { settings: TimerSettings; disab
       />
       <TextField label="Expired message" name="expiredText" value={expiredText} onChange={setExpiredText} autoComplete="off" disabled={disabled} />
       <FormLayout.Group>
-        <TextField label="Background color" name="bgColor" value={bgColor} onChange={setBgColor} autoComplete="off" disabled={disabled} />
-        <TextField label="Text color" name="textColor" value={textColor} onChange={setTextColor} autoComplete="off" disabled={disabled} />
+        <ColorField label="Background color" name="bgColor" value={bgColor} onChange={setBgColor} disabled={disabled} />
+        <ColorField label="Text color" name="textColor" value={textColor} onChange={setTextColor} disabled={disabled} />
       </FormLayout.Group>
     </FormLayout>
   );
@@ -475,7 +547,7 @@ function TrustFields({ settings: s, disabled }: { settings: TrustSettings; disab
       ))}
       <FormLayout.Group>
         <TextField label="Icon size (px)" name="iconSize" type="number" value={iconSize} onChange={setIconSize} autoComplete="off" disabled={disabled} />
-        <TextField label="Text color" name="color" value={color} onChange={setColor} autoComplete="off" disabled={disabled} />
+        <ColorField label="Text color" name="color" value={color} onChange={setColor} disabled={disabled} />
       </FormLayout.Group>
     </FormLayout>
   );
@@ -490,7 +562,7 @@ function SatcFields({ settings: s, disabled }: { settings: SatcSettings; disable
     <FormLayout>
       <FormLayout.Group>
         <TextField label="Button text" name="btnText" value={btnText} onChange={setBtnText} autoComplete="off" disabled={disabled} />
-        <TextField label="Button color" name="btnColor" value={btnColor} onChange={setBtnColor} autoComplete="off" disabled={disabled} />
+        <ColorField label="Button color" name="btnColor" value={btnColor} onChange={setBtnColor} disabled={disabled} />
       </FormLayout.Group>
       <Select
         label="After adding to cart"
@@ -529,7 +601,7 @@ function PopupFields({ settings: s, disabled }: { settings: PopupSettings; disab
       />
       <FormLayout.Group>
         <TextField label="Popup label" name="eyebrow" value={eyebrow} onChange={setEyebrow} autoComplete="off" disabled={disabled} />
-        <TextField label="Label color" name="accentColor" value={accentColor} onChange={setAccentColor} autoComplete="off" disabled={disabled} />
+        <ColorField label="Label color" name="accentColor" value={accentColor} onChange={setAccentColor} disabled={disabled} />
       </FormLayout.Group>
       <FormLayout.Group>
         <TextField label="First popup after (seconds)" name="firstDelay" type="number" value={firstDelay} onChange={setFirstDelay} autoComplete="off" disabled={disabled} />

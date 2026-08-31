@@ -264,7 +264,7 @@ export default function Index() {
               </div>
 
               <div className="pcard pcard--pro">
-                <div className="pcard__chip">7-day free trial</div>
+                <div className="pcard__chip">Most popular</div>
                 <div className="pcard__tier">Pro</div>
                 <div className="pcard__price">$49<span> / month</span></div>
                 <p className="pcard__tag">or $530/year (save ~10%) · Everything. Cancel any time.</p>
@@ -281,7 +281,7 @@ export default function Index() {
                   ))}
                 </ul>
                 <a href={APP_STORE_URL} className="btn btn--accent pcard__cta" target="_blank" rel="noopener noreferrer">
-                  Start free trial
+                  Upgrade to Pro
                 </a>
               </div>
             </div>

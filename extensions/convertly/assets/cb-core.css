@@ -3,7 +3,13 @@
 /* ---------- Announcement bar ---------- */
 .cb-bar {
   position: relative;
-  z-index: 999;
+  /* Very high on purpose: themes and third-party widgets (cookie banners,
+     chat launchers, sticky headers) routinely use z-index in the tens or
+     hundreds of thousands, and a value like 999 loses to virtually all of
+     them — leaving our fixed/sticky bars rendered but hidden behind other
+     page content. These three keep their relative order (satc > pop > bar)
+     but all sit near the practical ceiling so they win against any theme. */
+  z-index: 2147483645;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -111,7 +117,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: 998;
+  z-index: 2147483647; /* highest of the three — the buy button must never be obscured */
   display: flex;
   align-items: center;
   gap: 12px;
@@ -166,7 +172,7 @@
   position: fixed;
   left: 14px;
   bottom: 14px;
-  z-index: 997;
+  z-index: 2147483646;
   display: flex;
   align-items: center;
   gap: 12px;
