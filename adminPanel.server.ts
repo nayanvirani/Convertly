@@ -16,6 +16,7 @@ import {
   getEnrichedShops,
   migrateOfflineTokens,
   enrichedShopsToCSV,
+  purgeUninstalledShop,
   type EnrichedShop,
   type MigrationResult,
 } from "./app/admin.server";
@@ -205,12 +206,37 @@ function formatExpires(ts: string | number | null): string {
   });
 }
 
+function formatDate(iso: string | null): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+}
+
 // Plan always comes from our DB (webhook-driven) now, never a live API
 // call, so it's always confidently Pro/Free/Trial — no "API Error" state.
 function planBadge(shop: EnrichedShop): string {
   if (shop.isPro && shop.trialActive) return `<span class="badge-pill badge-purple">Trial</span>`;
   if (shop.isPro) return `<span class="badge-pill badge-purple">Pro</span>`;
   return `<span class="badge-pill badge-orange">Free</span>`;
+}
+
+function billingCell(shop: EnrichedShop): string {
+  if (!shop.isPro) return `<span style="color:#aaa;">—</span>`;
+  const interval = shop.billingInterval === "annual" ? "Yearly" : shop.billingInterval === "monthly" ? "Monthly" : null;
+  if (!interval) return `<span style="color:#aaa;" title="Live billing call didn't return interval data">Unknown</span>`;
+  return esc(interval);
+}
+
+// Distinct from the Plan badge above — this is about whether the shop is
+// still actually installed, sourced from a live 401/403/404 rather than
+// our own (webhook-driven, and therefore blind to a webhook that silently
+// never ran) database row. A row can show "Pro" and "Likely uninstalled"
+// at the same time — that combination IS the bug this is meant to catch.
+function statusBadge(shop: EnrichedShop): string {
+  if (shop.likelyUninstalled) return `<span class="badge-pill badge-red">Likely uninstalled</span>`;
+  if (!shop.accessToken) return `<span class="badge-pill badge-gray">No token</span>`;
+  return `<span class="badge-pill badge-green">Installed</span>`;
 }
 
 function migrationBanner(results: MigrationResult[]): string {
@@ -246,15 +272,25 @@ async function renderDashboardBody(adminPath: string, resultBanner: string): Pro
 
   const total = shops.length;
   const withTok = shops.filter((s) => s.accessToken).length;
-  const proCount = shops.filter((s) => s.isPro).length;
-  const trialCount = shops.filter((s) => s.trialActive).length;
-  const freeCount = total - proCount;
-  // Approximation only — we track plan (pro/free), not billing interval, so
-  // this assumes every Pro shop is on the $49/mo plan. A shop on the
-  // $530/yr plan actually contributes ~$44.17/mo equivalent, not $49; this
-  // will over-count once annual subscribers exist. Labeled "approx." below
-  // rather than silently showing a precise-looking wrong number.
-  const mrr = proCount * 49;
+  const uninstalledCount = shops.filter((s) => s.likelyUninstalled).length;
+  // Every count below excludes shops flagged likelyUninstalled — a stale
+  // session row whose merchant actually left shouldn't still count as a
+  // paying/active subscriber just because its cleanup webhook never ran.
+  // The table further down still lists every row, stale ones included, so
+  // there's a place to actually clean them up (see the Clean up button).
+  const counted = shops.filter((s) => !s.likelyUninstalled);
+  const proCount = counted.filter((s) => s.isPro).length;
+  const trialCount = counted.filter((s) => s.trialActive).length;
+  const freeCount = counted.length - proCount;
+  // Per-shop, using the real billing interval when the live call returned
+  // one (annual ≈ $530/12 per month, not $49) — only falls back to
+  // assuming $49/mo for a Pro shop where that call didn't succeed this
+  // load, so this is no longer a blanket "every Pro shop pays $49"
+  // approximation once interval data is actually available.
+  const mrr = counted
+    .filter((s) => s.isPro)
+    .reduce((sum, s) => sum + (s.billingInterval === "annual" ? 530 / 12 : 49), 0);
+  const mrrIsExact = counted.filter((s) => s.isPro).every((s) => s.billingInterval !== null);
   const needsMigration = shops.some((s) => s.accessToken && !s.refreshToken);
 
   const rows = shops
@@ -266,8 +302,17 @@ async function renderDashboardBody(adminPath: string, resultBanner: string): Pro
       <td>${s.ownerName ? esc(s.ownerName) : `<span style="color:#aaa;">—</span>`}</td>
       <td>${s.ownerEmail ? `<a class="link" href="mailto:${esc(s.ownerEmail)}">${esc(s.ownerEmail)}</a>` : `<span style="color:#aaa;">—</span>`}</td>
       <td>${planBadge(s)}</td>
-      <td>${s.accessToken ? `<span class="badge-pill badge-green">Active</span>` : `<span class="badge-pill badge-red">No Token</span>`}</td>
+      <td>${billingCell(s)}</td>
+      <td style="white-space:nowrap; color:#7B7367; font-size:12px;">${s.isPro ? formatDate(s.currentPeriodEnd) : `<span style="color:#aaa;">—</span>`}</td>
+      <td>${statusBadge(s)}</td>
       <td style="white-space:nowrap; color:#7B7367; font-size:12px;">${formatExpires(s.expires)}</td>
+      <td>${s.likelyUninstalled ? `
+        <form class="inline" method="post" action="${esc(adminPath)}" onsubmit="return confirm('Remove all stored data for ${esc(s.shop)}? This deletes its session, plan, and widget settings — only do this if the shop has genuinely uninstalled.');">
+          <input type="hidden" name="intent" value="purge" />
+          <input type="hidden" name="shop" value="${esc(s.shop)}" />
+          <button class="btn red" type="submit" style="padding:6px 12px; font-size:12px;">Clean up</button>
+        </form>` : ""}
+      </td>
     </tr>`
     )
     .join("");
@@ -279,10 +324,15 @@ async function renderDashboardBody(adminPath: string, resultBanner: string): Pro
       <div class="stat-card"><div class="stat-label">Pro Subscribers</div><div class="stat-value" style="color:#7C3AED;">${proCount}</div></div>
       <div class="stat-card"><div class="stat-label">Free Users</div><div class="stat-value" style="color:#B45309;">${freeCount}</div></div>
       <div class="stat-card"><div class="stat-label">On Trial</div><div class="stat-value" style="color:#0E7490;">${trialCount}</div></div>
-      <div class="stat-card"><div class="stat-label">MRR (approx.)</div><div class="stat-value text" style="color:#15803D;">$${mrr.toFixed(2)}</div></div>
+      <div class="stat-card"><div class="stat-label">MRR${mrrIsExact ? "" : " (approx.)"}</div><div class="stat-value text" style="color:#15803D;">$${mrr.toFixed(2)}</div></div>
     </div>
 
     ${resultBanner}
+
+    ${!resultBanner && uninstalledCount > 0 ? `
+    <div class="banner warn">
+      <span>⚠️ <strong>${uninstalledCount} shop(s) look uninstalled</strong> but still have stored data (their live token came back 401/403/404) — likely a cleanup webhook that never ran. Use "Clean up" on each flagged row below.</span>
+    </div>` : ""}
 
     ${!resultBanner && needsMigration ? `
     <div class="banner warn">
@@ -304,7 +354,7 @@ async function renderDashboardBody(adminPath: string, resultBanner: string): Pro
         ? `<div class="empty">${error ? "Could not load shops — check DATABASE_URL in Railway." : "No shops installed yet."}</div>`
         : `<div style="overflow-x:auto;">
         <table>
-          <thead><tr>${["#", "Store Name", "Shop Domain", "Owner", "Email", "Plan", "Token", "Session Expires"].map((h) => `<th>${h}</th>`).join("")}</tr></thead>
+          <thead><tr>${["#", "Store Name", "Shop Domain", "Owner", "Email", "Plan", "Billing", "Next Billing", "Status", "Session Expires", ""].map((h) => `<th>${h}</th>`).join("")}</tr></thead>
           <tbody>${rows}</tbody>
         </table>
       </div>`}
@@ -324,6 +374,12 @@ export async function handleDashboardAction(req: Request, res: Response, adminPa
   if (intent === "clear") {
     const { cleared } = await clearPermanentSessions();
     banner = `<div class="banner ok"><div><strong>✓ ${cleared} session(s) cleared.</strong> Now ask the merchant to open the app in Shopify admin — Token Exchange will run automatically and issue a new expiring token. The Shopify Monitoring warning should clear within 24 hours.</div></div>`;
+  } else if (intent === "purge") {
+    const shop = String(req.body?.shop ?? "");
+    if (shop) {
+      await purgeUninstalledShop(shop);
+      banner = `<div class="banner ok"><div><strong>✓ Cleaned up ${esc(shop)}.</strong> Its session, plan, and widget settings have been removed.</div></div>`;
+    }
   } else {
     const results = await migrateOfflineTokens();
     banner = migrationBanner(results);

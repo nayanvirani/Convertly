@@ -1,4 +1,4 @@
-import { pool, getShopPlan } from "./db.server";
+import { pool, getShopPlan, clearShopPlan, deleteWidgetSettings } from "./db.server";
 
 export type ShopRow = {
   id: string;
@@ -18,12 +18,24 @@ export type EnrichedShop = ShopRow & {
   isPro: boolean;
   planName: string;
   trialActive: boolean;
+  // Monthly/annual, and when the current period renews — null when the
+  // shop is Free, or when the live billing call didn't succeed.
+  billingInterval: "monthly" | "annual" | null;
+  currentPeriodEnd: string | null;
   // Whether the live store-details call (name/owner/email) failed — this no
   // longer has anything to do with Plan. Plan comes from our own database
   // (shop_plans, kept current by the APP_SUBSCRIPTIONS_UPDATE webhook), so
   // it's always known and never shows "API Error" just because a live
   // Admin API call happened to fail or the token was mid-refresh.
   storeInfoError: boolean;
+  // True when a live call came back with a status that specifically means
+  // "this token is no longer valid" (401/403/404) rather than a generic
+  // failure (timeout, 5xx, network blip) — a strong signal the merchant
+  // uninstalled the app and our cleanup webhook never ran (e.g. the app
+  // happened to be down for the few seconds Shopify tried to deliver it).
+  // Distinct from storeInfoError, which also trips on merely transient
+  // failures that say nothing about install status.
+  likelyUninstalled: boolean;
 };
 
 export async function getShops(): Promise<ShopRow[]> {
@@ -164,6 +176,21 @@ export async function clearPermanentSessions(): Promise<{ cleared: number }> {
   return { cleared: result.rowCount ?? 0 };
 }
 
+// Manual equivalent of what the APP_UNINSTALLED/SHOP_REDACT webhooks are
+// supposed to do — for the rare case one of them never ran (a delivery
+// that failed while the app happened to be down, say) and left a shop
+// marked installed/Active/Pro in this dashboard indefinitely. Only ever
+// called from an admin-panel action on a row the dashboard has already
+// flagged likelyUninstalled from a live 401/403/404, and only after the
+// admin explicitly clicks the button for that specific shop.
+export async function purgeUninstalledShop(shop: string): Promise<void> {
+  await Promise.all([
+    pool().query(`DELETE FROM "shopify_sessions" WHERE "shop" = $1`, [shop]),
+    clearShopPlan(shop),
+    deleteWidgetSettings(shop),
+  ]);
+}
+
 async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T | null> {
   const timeout = new Promise<null>((res) => setTimeout(() => res(null), ms));
   return Promise.race([promise, timeout]);
@@ -173,7 +200,7 @@ async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T | null
 
 type RefreshResult =
   | { ok: true; accessToken: string; expires: number; refreshToken: string; refreshTokenExpires: number }
-  | { ok: false; error: string };
+  | { ok: false; error: string; status?: number };
 
 async function refreshAccessToken(shop: string, refreshToken: string): Promise<RefreshResult> {
   const apiKey    = process.env.SHOPIFY_API_KEY;
@@ -199,7 +226,7 @@ async function refreshAccessToken(shop: string, refreshToken: string): Promise<R
       }),
       8000
     );
-    if (!res || !res.ok) return { ok: false, error: `HTTP ${res?.status ?? "timeout"}` };
+    if (!res || !res.ok) return { ok: false, error: `HTTP ${res?.status ?? "timeout"}`, status: res?.status };
     const data: any = await res.json();
     if (!data.access_token) return { ok: false, error: "No access_token in response" };
     const now = Math.floor(Date.now() / 1000);
@@ -220,7 +247,10 @@ async function refreshAccessToken(shop: string, refreshToken: string): Promise<R
 async function fetchShopInfo(
   shop: string,
   accessToken: string
-): Promise<{ storeName: string; ownerName: string; ownerEmail: string } | null> {
+): Promise<
+  | { ok: true; storeName: string; ownerName: string; ownerEmail: string }
+  | { ok: false; status?: number }
+> {
   try {
     const res = await withTimeout(
       fetch(`https://${shop}/admin/api/2025-10/shop.json`, {
@@ -228,15 +258,16 @@ async function fetchShopInfo(
       }),
       6000
     );
-    if (!res || !res.ok) return null;
+    if (!res || !res.ok) return { ok: false, status: res?.status };
     const data: any = await res.json();
     return {
+      ok: true,
       storeName: data.shop?.name ?? shop,
       ownerName: data.shop?.shop_owner ?? "",
       ownerEmail: data.shop?.email ?? "",
     };
   } catch {
-    return null;
+    return { ok: false };
   }
 }
 
@@ -246,12 +277,39 @@ async function fetchShopInfo(
 // isPro: that's always getShopPlan() (our DB, kept current by the
 // APP_SUBSCRIPTIONS_UPDATE webhook), so a failed/slow/mid-refresh API call
 // here never produces "API Error" or a wrong Free/Pro status.
+type BillingDetails = {
+  planName: string;
+  trialActive: boolean;
+  // "annual" only when Shopify's own AppRecurringPricing interval says so
+  // for the line item actually billing (i.e. not a $0 trial line) — never
+  // guessed from the plan name, so this can't drift if a plan gets renamed.
+  billingInterval: "monthly" | "annual" | null;
+  currentPeriodEnd: string | null;
+};
+
 async function fetchBillingDetails(
   shop: string,
   accessToken: string
-): Promise<{ planName: string; trialActive: boolean } | null> {
+): Promise<BillingDetails | null> {
   try {
-    const query = `{ currentAppInstallation { activeSubscriptions { name status trialDays } } }`;
+    const query = `{
+      currentAppInstallation {
+        activeSubscriptions {
+          name
+          status
+          trialDays
+          currentPeriodEnd
+          lineItems {
+            plan {
+              pricingDetails {
+                __typename
+                ... on AppRecurringPricing { interval }
+              }
+            }
+          }
+        }
+      }
+    }`;
     const res = await withTimeout(
       fetch(`https://${shop}/admin/api/2025-10/graphql.json`, {
         method: "POST",
@@ -268,13 +326,28 @@ async function fetchBillingDetails(
     const subs: any[] = data.data?.currentAppInstallation?.activeSubscriptions ?? [];
     const active = subs[0];
     if (!active) return null;
+
+    const recurringLineItem = (active.lineItems ?? []).find(
+      (li: any) => li.plan?.pricingDetails?.__typename === "AppRecurringPricing"
+    );
+    const interval = recurringLineItem?.plan?.pricingDetails?.interval as string | undefined;
+
     return {
       planName: active.name ?? "Pro",
       trialActive: active.status === "ACTIVE" && (active.trialDays ?? 0) > 0,
+      billingInterval: interval === "ANNUAL" ? "annual" : interval === "EVERY_30_DAYS" ? "monthly" : null,
+      currentPeriodEnd: active.currentPeriodEnd ?? null,
     };
   } catch {
     return null;
   }
+}
+
+// A status in this set specifically means "this token no longer works" —
+// as opposed to a timeout, a 5xx, or a network blip, none of which say
+// anything about whether the shop is still installed.
+function isRevokedStatus(status: number | undefined): boolean {
+  return status === 401 || status === 402 || status === 403 || status === 404;
 }
 
 export async function getEnrichedShops(): Promise<EnrichedShop[]> {
@@ -297,12 +370,16 @@ export async function getEnrichedShops(): Promise<EnrichedShop[]> {
           isPro,
           planName: isPro ? "Pro" : "Free",
           trialActive: false,
+          billingInterval: null,
+          currentPeriodEnd: null,
           storeInfoError: false,
+          likelyUninstalled: false,
         };
       }
 
       // Auto-refresh the access token if it has expired.
       let accessToken = shop.accessToken;
+      let revoked = false;
       const now = Math.floor(Date.now() / 1000);
       if (shop.expires && shop.expires < now && shop.refreshToken) {
         console.log(`[admin] token expired for ${shop.shop}, refreshing…`);
@@ -313,25 +390,32 @@ export async function getEnrichedShops(): Promise<EnrichedShop[]> {
           console.log(`[admin] token refreshed for ${shop.shop}`);
         } else {
           console.warn(`[admin] token refresh failed for ${shop.shop}:`, refreshed.error);
+          if (isRevokedStatus(refreshed.status)) revoked = true;
         }
       }
 
-      // Live calls now only enrich display (store/owner name, trial badge)
-      // — their failure never affects Plan or produces "API Error" there.
+      // Live calls now only enrich display (store/owner name, trial badge,
+      // billing interval) — their failure never affects Plan there. It DOES
+      // feed likelyUninstalled below, since a 401/403/404 here is the same
+      // "token no longer valid" signal as one from the refresh above.
       const [info, billingDetails] = await Promise.all([
         fetchShopInfo(shop.shop, accessToken),
         fetchBillingDetails(shop.shop, accessToken),
       ]);
+      if (!info.ok && isRevokedStatus(info.status)) revoked = true;
 
       return {
         ...shop,
-        storeName: info?.storeName ?? null,
-        ownerName: info?.ownerName ?? null,
-        ownerEmail: info?.ownerEmail ?? null,
+        storeName: info.ok ? info.storeName : null,
+        ownerName: info.ok ? info.ownerName : null,
+        ownerEmail: info.ok ? info.ownerEmail : null,
         isPro,
         planName: billingDetails?.planName ?? (isPro ? "Pro" : "Free"),
         trialActive: isPro && (billingDetails?.trialActive ?? false),
-        storeInfoError: info === null,
+        billingInterval: isPro ? billingDetails?.billingInterval ?? null : null,
+        currentPeriodEnd: isPro ? billingDetails?.currentPeriodEnd ?? null : null,
+        storeInfoError: !info.ok,
+        likelyUninstalled: revoked,
       };
     })
   );
@@ -351,7 +435,7 @@ export function shopsToCSV(shops: ShopRow[]): string {
 }
 
 export function enrichedShopsToCSV(shops: EnrichedShop[]): string {
-  const header = "Shop Domain,Store Name,Owner Name,Owner Email,Plan,Session ID,Scopes,Expires,Has Token";
+  const header = "Shop Domain,Store Name,Owner Name,Owner Email,Plan,Billing Interval,Next Billing,Install Status,Session ID,Scopes,Expires,Has Token";
   const rows = shops.map((s) => {
     const expires = s.expires
       ? new Date(s.expires * 1000).toISOString()
@@ -359,9 +443,12 @@ export function enrichedShopsToCSV(shops: EnrichedShop[]): string {
     const scopes = `"${(s.scope || "").replace(/"/g, '""')}"`;
     const hasToken = s.accessToken ? "yes" : "no";
     const quote = (v: string | null) => `"${(v ?? "").replace(/"/g, '""')}"`;
+    const installStatus = s.likelyUninstalled ? "Likely uninstalled" : s.accessToken ? "Installed" : "No token";
     return [
       s.shop, quote(s.storeName), quote(s.ownerName), quote(s.ownerEmail),
       s.isPro ? "Pro" : "Free",
+      s.billingInterval ?? "", s.currentPeriodEnd ?? "",
+      installStatus,
       s.id, scopes, expires, hasToken,
     ].join(",");
   });
