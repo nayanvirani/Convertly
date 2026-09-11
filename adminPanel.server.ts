@@ -430,9 +430,8 @@ function money(amount: number, currency: string): string {
   return `${amount < 0 ? "-" : ""}$${Math.abs(amount).toFixed(2)}${currency !== "USD" ? " " + currency : ""}`;
 }
 
-// Nayan's revenue-share cut — computed off NET revenue (i.e. after
-// Shopify's own platform fee comes out), since that's the actual money
-// that lands in the account each payout, not the pre-fee sticker price.
+// Nayan's revenue-share cut — computed off GROSS revenue (the pre-fee
+// sticker price), not net.
 const NAYAN_SHARE_PCT = 0.15;
 
 function monthLabel(month: string): string {
@@ -463,7 +462,7 @@ async function renderRevenueBody(adminPath: string, selectedMonth: string | null
       <td>${m.count}</td>
       <td>${money(m.gross, m.currency)}</td>
       <td>${money(m.net, m.currency)}</td>
-      <td>${money(m.net * NAYAN_SHARE_PCT, m.currency)}</td>
+      <td>${money(m.gross * NAYAN_SHARE_PCT, m.currency)}</td>
     </tr>`
     )
     .join("");
@@ -483,7 +482,7 @@ async function renderRevenueBody(adminPath: string, selectedMonth: string | null
       <td>${t.billingInterval === "ANNUAL" ? "Yearly" : t.billingInterval === "EVERY_30_DAYS" ? "Monthly" : "—"}</td>
       <td>${money(t.grossAmount, t.currency)}</td>
       <td>${money(t.netAmount, t.currency)}</td>
-      <td>${money(t.netAmount * NAYAN_SHARE_PCT, t.currency)}</td>
+      <td>${money(t.grossAmount * NAYAN_SHARE_PCT, t.currency)}</td>
     </tr>`
     )
     .join("");
@@ -493,7 +492,7 @@ async function renderRevenueBody(adminPath: string, selectedMonth: string | null
       <div class="stat-card"><div class="stat-label">Total Payments (all-time)</div><div class="stat-value" style="color:#0E7490;">${totalCount}</div></div>
       <div class="stat-card"><div class="stat-label">Gross Revenue (all-time)</div><div class="stat-value text" style="color:#15803D;">${money(totalGross, currency)}</div></div>
       <div class="stat-card"><div class="stat-label">Net Revenue (all-time)</div><div class="stat-value text" style="color:#15803D;">${money(totalNet, currency)}</div><div class="stat-hint">after Shopify's fee</div></div>
-      <div class="stat-card"><div class="stat-label">Nayan's Share (15%, all-time)</div><div class="stat-value text" style="color:#7C3AED;">${money(totalNet * NAYAN_SHARE_PCT, currency)}</div><div class="stat-hint">15% of net revenue</div></div>
+      <div class="stat-card"><div class="stat-label">Nayan's Share (15%, all-time)</div><div class="stat-value text" style="color:#7C3AED;">${money(totalGross * NAYAN_SHARE_PCT, currency)}</div><div class="stat-hint">15% of gross revenue</div></div>
     </div>
 
     <div class="card">
