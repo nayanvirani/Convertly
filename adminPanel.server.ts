@@ -70,8 +70,9 @@ function layout(opts: { title: string; badge: string; adminPath: string; body: s
   header .export { background: #22D47E; color: #0B1730; border: none; }
   main { max-width: 1280px; margin: 0 auto; padding: 32px 24px; }
   .narrow { max-width: 720px; }
-  .stats-row { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; margin-bottom: 28px; }
+  .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 28px; }
   .stat-card { background: #fff; border: 1px solid #E3DDD5; border-radius: 12px; padding: 18px 20px; }
+  .stat-hint { font-size: 11px; color: #AAA49C; margin-top: 6px; }
   .stat-label {
     font-size: 11px; font-weight: 700; color: #7B7367;
     text-transform: uppercase; letter-spacing: 0.06em;
@@ -270,28 +271,34 @@ async function renderDashboardBody(adminPath: string, resultBanner: string): Pro
     error = String(e.message ?? e);
   }
 
+  // Total Installs (all-time rows) = Currently Installed + Likely
+  // Uninstalled, always — and Currently Installed = Pro + Free, always.
+  // Every stat card below is one term in that breakdown, on purpose, so
+  // the numbers reconcile at a glance instead of a Total that silently
+  // includes shops no other card accounts for.
   const total = shops.length;
-  const withTok = shops.filter((s) => s.accessToken).length;
   const uninstalledCount = shops.filter((s) => s.likelyUninstalled).length;
-  // Every count below excludes shops flagged likelyUninstalled — a stale
-  // session row whose merchant actually left shouldn't still count as a
-  // paying/active subscriber just because its cleanup webhook never ran.
-  // The table further down still lists every row, stale ones included, so
-  // there's a place to actually clean them up (see the Clean up button).
-  const counted = shops.filter((s) => !s.likelyUninstalled);
+  const counted = shops.filter((s) => !s.likelyUninstalled); // "Currently Installed"
+  const currentlyInstalled = counted.length;
   const proCount = counted.filter((s) => s.isPro).length;
   const trialCount = counted.filter((s) => s.trialActive).length;
-  const freeCount = counted.length - proCount;
+  const freeCount = currentlyInstalled - proCount;
   // Per-shop, using the real billing interval when the live call returned
   // one (annual ≈ $530/12 per month, not $49) — only falls back to
   // assuming $49/mo for a Pro shop where that call didn't succeed this
   // load, so this is no longer a blanket "every Pro shop pays $49"
   // approximation once interval data is actually available.
-  const mrr = counted
-    .filter((s) => s.isPro)
-    .reduce((sum, s) => sum + (s.billingInterval === "annual" ? 530 / 12 : 49), 0);
-  const mrrIsExact = counted.filter((s) => s.isPro).every((s) => s.billingInterval !== null);
-  const needsMigration = shops.some((s) => s.accessToken && !s.refreshToken);
+  const proShops = counted.filter((s) => s.isPro);
+  const mrr = proShops.reduce((sum, s) => sum + (s.billingInterval === "annual" ? 530 / 12 : 49), 0);
+  const mrrIsExact = proShops.every((s) => s.billingInterval !== null);
+  // Soonest upcoming charge across every active Pro subscription — same
+  // "next billing" date shown per-row in the table, just surfaced as a
+  // single at-a-glance number for whichever shop renews soonest.
+  const nextRenewalShop = proShops
+    .filter((s) => s.currentPeriodEnd)
+    .sort((a, b) => new Date(a.currentPeriodEnd!).getTime() - new Date(b.currentPeriodEnd!).getTime())[0];
+  const needsMigrationCount = shops.filter((s) => s.accessToken && !s.refreshToken).length;
+  const needsMigration = needsMigrationCount > 0;
 
   const rows = shops
     .map(
@@ -319,12 +326,14 @@ async function renderDashboardBody(adminPath: string, resultBanner: string): Pro
 
   return `
     <div class="stats-row">
-      <div class="stat-card"><div class="stat-label">Total Installs</div><div class="stat-value" style="color:#1B8FEA;">${total}</div></div>
-      <div class="stat-card"><div class="stat-label">Active Tokens</div><div class="stat-value" style="color:#1A7048;">${withTok}</div></div>
+      <div class="stat-card"><div class="stat-label">Total Installs (all-time)</div><div class="stat-value" style="color:#1B8FEA;">${total}</div><div class="stat-hint">= Currently Installed + Likely Uninstalled</div></div>
+      <div class="stat-card"><div class="stat-label">Currently Installed</div><div class="stat-value" style="color:#1A7048;">${currentlyInstalled}</div><div class="stat-hint">= Pro + Free, below</div></div>
+      <div class="stat-card"><div class="stat-label">Likely Uninstalled</div><div class="stat-value" style="color:#B91C1C;">${uninstalledCount}</div><div class="stat-hint">stale data — see Clean up below</div></div>
       <div class="stat-card"><div class="stat-label">Pro Subscribers</div><div class="stat-value" style="color:#7C3AED;">${proCount}</div></div>
       <div class="stat-card"><div class="stat-label">Free Users</div><div class="stat-value" style="color:#B45309;">${freeCount}</div></div>
       <div class="stat-card"><div class="stat-label">On Trial</div><div class="stat-value" style="color:#0E7490;">${trialCount}</div></div>
       <div class="stat-card"><div class="stat-label">MRR${mrrIsExact ? "" : " (approx.)"}</div><div class="stat-value text" style="color:#15803D;">$${mrr.toFixed(2)}</div></div>
+      <div class="stat-card"><div class="stat-label">Next Renewal</div><div class="stat-value text" style="color:#0F1C3F;">${nextRenewalShop ? formatDate(nextRenewalShop.currentPeriodEnd) : "—"}</div>${nextRenewalShop ? `<div class="stat-hint">${esc(nextRenewalShop.shop)}</div>` : ""}</div>
     </div>
 
     ${resultBanner}
@@ -336,7 +345,7 @@ async function renderDashboardBody(adminPath: string, resultBanner: string): Pro
 
     ${!resultBanner && needsMigration ? `
     <div class="banner warn">
-      <span>⚠️ <strong>Fix overdue:</strong> ${withTok} shop(s) use deprecated permanent offline tokens.</span>
+      <span>⚠️ <strong>Fix overdue:</strong> ${needsMigrationCount} shop(s) use deprecated permanent offline tokens.</span>
       <div style="display:flex; gap:8px; flex-shrink:0;">
         <form class="inline" method="post" action="${esc(adminPath)}"><button class="btn orange" type="submit">Try exchange</button></form>
         <form class="inline" method="post" action="${esc(adminPath)}"><input type="hidden" name="intent" value="clear" /><button class="btn red" type="submit">Clear &amp; force re-auth</button></form>
