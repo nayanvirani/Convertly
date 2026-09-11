@@ -29,6 +29,11 @@ import {
   createSessionToken,
   SESSION_MAX_AGE_SEC,
 } from "./app/adminAuth.server";
+import {
+  getAppTransactions,
+  groupByMonth,
+  isPartnerApiConfigured,
+} from "./app/partner.server";
 
 function esc(value: unknown): string {
   return String(value ?? "").replace(/[&<>"']/g, (c) =>
@@ -139,6 +144,7 @@ function layout(opts: { title: string; badge: string; adminPath: string; body: s
   </div>
   <div style="display:flex; align-items:center; gap:10px;">
     <a href="${esc(opts.adminPath)}">Dashboard</a>
+    <a href="${esc(opts.adminPath)}/revenue">Revenue</a>
     <a href="${esc(opts.adminPath)}/users">Admin users</a>
     <a class="export" href="${esc(opts.adminPath)}/export">↓ Export CSV</a>
     <form class="inline" method="post" action="${esc(opts.adminPath)}/logout">
@@ -212,6 +218,14 @@ function formatDate(iso: string | null): string {
   const d = new Date(iso);
   if (isNaN(d.getTime())) return "—";
   return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+}
+
+function formatDateTime(iso: string): string {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "—";
+  return d.toLocaleString("en-GB", {
+    day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit",
+  });
 }
 
 // Plan always comes from our DB (webhook-driven) now, never a live API
@@ -300,6 +314,14 @@ async function renderDashboardBody(adminPath: string, resultBanner: string): Pro
   const needsMigrationCount = shops.filter((s) => s.accessToken && !s.refreshToken).length;
   const needsMigration = needsMigrationCount > 0;
 
+  // Real payment count, from Shopify's own Partner API transaction
+  // records — not derived from our Pro/Free counts above, which only ever
+  // reflect the CURRENT moment (they say nothing about a shop that paid
+  // for 3 months and cancelled last week, for instance).
+  const partnerConfigured = isPartnerApiConfigured();
+  const transactions = partnerConfigured ? await getAppTransactions() : [];
+  const totalPayments = transactions.length;
+
   const rows = shops
     .map(
       (s, i) => `<tr>
@@ -334,6 +356,7 @@ async function renderDashboardBody(adminPath: string, resultBanner: string): Pro
       <div class="stat-card"><div class="stat-label">On Trial</div><div class="stat-value" style="color:#0E7490;">${trialCount}</div></div>
       <div class="stat-card"><div class="stat-label">MRR${mrrIsExact ? "" : " (approx.)"}</div><div class="stat-value text" style="color:#15803D;">$${mrr.toFixed(2)}</div></div>
       <div class="stat-card"><div class="stat-label">Next Renewal</div><div class="stat-value text" style="color:#0F1C3F;">${nextRenewalShop ? formatDate(nextRenewalShop.currentPeriodEnd) : "—"}</div>${nextRenewalShop ? `<div class="stat-hint">${esc(nextRenewalShop.shop)}</div>` : ""}</div>
+      <div class="stat-card"><div class="stat-label">Total Payments (all-time)</div><div class="stat-value" style="color:#0E7490;">${partnerConfigured ? totalPayments : "—"}</div><div class="stat-hint">${partnerConfigured ? `<a class="link" href="${esc(adminPath)}/revenue">See monthly breakdown →</a>` : "Partner API not configured"}</div></div>
     </div>
 
     ${resultBanner}
@@ -395,6 +418,114 @@ export async function handleDashboardAction(req: Request, res: Response, adminPa
   }
   const body = await renderDashboardBody(adminPath, banner);
   res.status(200).type("html").send(layout({ title: "Admin", badge: "Admin", adminPath, body }));
+}
+
+// ─── Revenue ────────────────────────────────────────────────────────────────
+// Sourced entirely from the Partner API (see app/partner.server.ts) — real
+// transaction records Shopify itself processed, not derived from the
+// dashboard's own Pro/Free snapshot above (which only reflects the current
+// moment and says nothing about a shop that paid for months and left).
+
+function money(amount: number, currency: string): string {
+  return `${amount < 0 ? "-" : ""}$${Math.abs(amount).toFixed(2)}${currency !== "USD" ? " " + currency : ""}`;
+}
+
+function monthLabel(month: string): string {
+  const [y, m] = month.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString("en-GB", { month: "long", year: "numeric" });
+}
+
+async function renderRevenueBody(adminPath: string, selectedMonth: string | null): Promise<string> {
+  if (!isPartnerApiConfigured()) {
+    return `<div class="banner warn"><span>⚠️ Partner API isn't configured — set <code>PARTNER_API_TOKEN</code> and <code>PARTNER_ORG_ID</code> to see real payment history here.</span></div>`;
+  }
+
+  const transactions = await getAppTransactions();
+  const months = groupByMonth(transactions);
+  const totalCount = transactions.length;
+  const totalGross = transactions.reduce((s, t) => s + t.grossAmount, 0);
+  const totalNet = transactions.reduce((s, t) => s + t.netAmount, 0);
+  const currency = transactions[0]?.currency ?? "USD";
+
+  const monthOptions = [`<option value="">All time</option>`]
+    .concat(months.map((m) => `<option value="${esc(m.month)}" ${m.month === selectedMonth ? "selected" : ""}>${esc(monthLabel(m.month))}</option>`))
+    .join("");
+
+  const monthRows = months
+    .map(
+      (m) => `<tr>
+      <td><a class="link" href="${esc(adminPath)}/revenue?month=${esc(m.month)}">${esc(monthLabel(m.month))}</a></td>
+      <td>${m.count}</td>
+      <td>${money(m.gross, m.currency)}</td>
+      <td>${money(m.net, m.currency)}</td>
+    </tr>`
+    )
+    .join("");
+
+  const detail = selectedMonth
+    ? transactions
+        .filter((t) => t.createdAt.slice(0, 7) === selectedMonth)
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    : [];
+
+  const detailRows = detail
+    .map(
+      (t) => `<tr>
+      <td style="white-space:nowrap; color:#7B7367; font-size:12px;">${formatDateTime(t.createdAt)}</td>
+      <td>${t.shopName ? esc(t.shopName) : `<span style="color:#aaa;">—</span>`}</td>
+      <td><a class="link" href="https://${esc(t.shopDomain ?? "")}/admin" target="_blank" rel="noreferrer">${esc(t.shopDomain ?? "—")}</a></td>
+      <td>${t.billingInterval === "ANNUAL" ? "Yearly" : t.billingInterval === "EVERY_30_DAYS" ? "Monthly" : "—"}</td>
+      <td>${money(t.grossAmount, t.currency)}</td>
+      <td>${money(t.netAmount, t.currency)}</td>
+    </tr>`
+    )
+    .join("");
+
+  return `
+    <div class="stats-row" style="grid-template-columns: repeat(3, 1fr);">
+      <div class="stat-card"><div class="stat-label">Total Payments (all-time)</div><div class="stat-value" style="color:#0E7490;">${totalCount}</div></div>
+      <div class="stat-card"><div class="stat-label">Gross Revenue (all-time)</div><div class="stat-value text" style="color:#15803D;">${money(totalGross, currency)}</div></div>
+      <div class="stat-card"><div class="stat-label">Net Revenue (all-time)</div><div class="stat-value text" style="color:#15803D;">${money(totalNet, currency)}</div><div class="stat-hint">after Shopify's fee</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Monthly breakdown</span>
+        <form method="get" action="${esc(adminPath)}/revenue" style="display:flex; align-items:center; gap:8px;">
+          <select name="month" onchange="this.form.submit()" style="border:1px solid #E3DDD5; border-radius:8px; padding:7px 10px; font-size:13px; font-family:inherit;">
+            ${monthOptions}
+          </select>
+        </form>
+      </div>
+      ${months.length === 0
+        ? `<div class="empty">No payments recorded yet.</div>`
+        : `<div style="overflow-x:auto;">
+        <table>
+          <thead><tr><th>Month</th><th>Payments</th><th>Gross</th><th>Net</th></tr></thead>
+          <tbody>${monthRows}</tbody>
+        </table>
+      </div>`}
+    </div>
+
+    ${selectedMonth ? `
+    <div class="card">
+      <div class="card-header"><span class="card-title">${esc(monthLabel(selectedMonth))} — ${detail.length} payment(s)</span></div>
+      <div style="overflow-x:auto;">
+        <table>
+          <thead><tr><th>Date</th><th>Store</th><th>Shop Domain</th><th>Billing</th><th>Gross</th><th>Net</th></tr></thead>
+          <tbody>${detailRows}</tbody>
+        </table>
+      </div>
+    </div>` : ""}
+
+    <p style="font-size:11px; color:#AAA49C; margin-top:16px; text-align:center;">Sourced from Shopify's Partner API — real transaction records, cached for up to 5 minutes.</p>
+  `;
+}
+
+export async function renderRevenue(req: Request, res: Response, adminPath: string) {
+  const month = typeof req.query.month === "string" && req.query.month ? req.query.month : null;
+  const body = await renderRevenueBody(adminPath, month);
+  res.status(200).type("html").send(layout({ title: "Revenue", badge: "Revenue", adminPath, body }));
 }
 
 // ─── Export / debug ─────────────────────────────────────────────────────────

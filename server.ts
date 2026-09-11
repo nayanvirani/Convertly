@@ -7,6 +7,7 @@ import {
   handleDashboardAction,
   renderExport,
   renderDebug,
+  renderRevenue,
   renderUsers,
   handleUsersAction,
   renderLogin,
@@ -74,6 +75,7 @@ function registerAdminRoutes(basePath: string) {
   adminRouter.post("/", (req, res) => handleDashboardAction(req, res, basePath));
   adminRouter.get("/export", renderExport);
   adminRouter.get("/debug", renderDebug);
+  adminRouter.get("/revenue", (req, res) => renderRevenue(req, res, basePath));
   adminRouter.get("/users", (req, res) =>
     renderUsers(req, res, basePath, (req as any).adminUsername ?? null)
   );
