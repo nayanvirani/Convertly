@@ -298,6 +298,7 @@ async function fetchBillingDetails(
           name
           status
           trialDays
+          createdAt
           currentPeriodEnd
           lineItems {
             plan {
@@ -332,9 +333,21 @@ async function fetchBillingDetails(
     );
     const interval = recurringLineItem?.plan?.pricingDetails?.interval as string | undefined;
 
+    // trialDays is the ORIGINAL grant "starting at the subscription's
+    // creation date" (Shopify's own field description) — a fixed number
+    // that stays > 0 forever, including long after the trial has actually
+    // ended and real billing has kicked in. Checking trialDays > 0 alone
+    // (as this used to) showed "Trial" indefinitely for any subscription
+    // ever granted one, even one currently mid-way through its second or
+    // third paid month. Compute the actual trial-end instant from
+    // createdAt + trialDays and compare it to now instead.
+    const createdMs = active.createdAt ? new Date(active.createdAt).getTime() : NaN;
+    const trialEndMs = createdMs + (active.trialDays ?? 0) * 86400000;
+    const trialActive = active.status === "ACTIVE" && !isNaN(trialEndMs) && Date.now() < trialEndMs;
+
     return {
       planName: active.name ?? "Pro",
-      trialActive: active.status === "ACTIVE" && (active.trialDays ?? 0) > 0,
+      trialActive,
       billingInterval: interval === "ANNUAL" ? "annual" : interval === "EVERY_30_DAYS" ? "monthly" : null,
       currentPeriodEnd: active.currentPeriodEnd ?? null,
     };
