@@ -1,5 +1,11 @@
 import { pool, getShopPlan, clearShopPlan, deleteWidgetSettings } from "./db.server";
 
+// Shopify retires Admin API versions on a quarterly cadence (confirmed
+// live: 2025-10 started returning "Invalid API version" the moment Oct 1
+// hit) — one named constant here instead of the version string hardcoded
+// at each call site, so there's exactly one place to bump going forward.
+const ADMIN_API_VERSION = "2026-07";
+
 export type ShopRow = {
   id: string;
   shop: string;
@@ -253,7 +259,7 @@ async function fetchShopInfo(
 > {
   try {
     const res = await withTimeout(
-      fetch(`https://${shop}/admin/api/2025-10/shop.json`, {
+      fetch(`https://${shop}/admin/api/${ADMIN_API_VERSION}/shop.json`, {
         headers: { "X-Shopify-Access-Token": accessToken },
       }),
       6000
@@ -312,7 +318,7 @@ async function fetchBillingDetails(
       }
     }`;
     const res = await withTimeout(
-      fetch(`https://${shop}/admin/api/2025-10/graphql.json`, {
+      fetch(`https://${shop}/admin/api/${ADMIN_API_VERSION}/graphql.json`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

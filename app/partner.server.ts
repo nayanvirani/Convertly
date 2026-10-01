@@ -21,7 +21,11 @@ export type AppTransaction = {
   shopDomain: string | null;
 };
 
-const PARTNER_API_VERSION = "2025-10";
+// Shopify retires API versions on a quarterly cadence (confirmed live:
+// 2025-10 started returning "Invalid API version" the moment Oct 1 hit —
+// same day this broke the admin.server.ts Admin API calls too). Bump
+// here when it next expires.
+const PARTNER_API_VERSION = "2026-07";
 
 async function fetchAllTransactions(): Promise<AppTransaction[]> {
   const token = process.env.PARTNER_API_TOKEN;
